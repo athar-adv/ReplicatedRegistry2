@@ -137,7 +137,8 @@ local ReplicatedRegistry = {
 	},
 	client = {
 		callbacks = {}
-	}
+	},
+	meta = {}
 }
 
 local function diff_changes(changed: (value: any, path: {any}) -> (), current: Table, lastCopy: Table, path: {any})
@@ -610,11 +611,15 @@ function ReplicatedRegistry.server.callbacks.request_full_handler(player: Player
 	if registerKey == nil then return end
 	if not ReplicatedRegistry.server.callbacks.validate_full_request(player, registerKey) then return end
 	local registree = registrees[registerKey]
-
+	
 	if not registree then
 		return
 	end
 	return registree.value
+end
+
+function ReplicatedRegistry.meta.switch_signal_lib(new_signal_lib: typeof(Signal))
+	Signal = new_signal_lib
 end
 
 return ReplicatedRegistry
