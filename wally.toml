@@ -1,0 +1,10 @@
+[package]
+name = "athar-adv/replicated-registry"
+version = "1.0.1"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+license = "MIT"
+authors = ["athar_adv"]
+exclude = ["rokit.toml"]
+
+[dependencies]
