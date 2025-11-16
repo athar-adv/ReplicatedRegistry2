@@ -1,6 +1,5 @@
 --!strict
 --!optimize 2
---ReplicatedRegistry2.luau
 
 local RunService = game:GetService("RunService")
 local Signal = require("@self/Signal")
@@ -454,36 +453,13 @@ function ReplicatedRegistry.revert_changes(registerKey: any, changes: TableChang
 	end
 end
 
-function ReplicatedRegistry.send_changes(replicationMode: ReplicationMode, registerKey: any, player: Player?, customEvent: Remote?, _changes: TableChanges?)
-	assert(not ((replicationMode == "ToClient" or replicationMode == "ToAllClients") and IS_CLIENT), "Cannot send to client or to all clients on the client.")
-	assert(not (not IS_CLIENT and replicationMode == "ToServer"), "Cannot send to server from the server.")
-	assert(not (replicationMode == "ToClient" and player == nil), "If replicationMode is ToClient, player argument must be specified.")
-	assert(registrees[registerKey] ~= nil, `Register key {registerKey} does not exist. (Did you forget to call SetTable?)`)
-	assert(not (not script:GetAttribute("ServerLoaded") and replicationMode == "ToServer"), "Server has not required the module yet, cannot send to server.")
-	
-	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
-	assert(event, "RemoteEvent not specified")
-
-	local fnName = REPLICATION_MODE_REMAP[replicationMode]
-	assert(fnName ~= nil, "Replication mode must be either 'ToClient', 'ToAllClients' or 'ToServer'.")
-	local fn = (event::any)[fnName]
-	
-	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
-	ReplicatedRegistry.commit_changes(registerKey, changes)
-	
-	-- Send changes, return early if none
-	if #changes == 0 then return end
-	if serialize then
-		changes = serialize(changes)
-		if typeof(changes) ~= serde_serialized_type then
-			error(`expected '{serde_serialized_type}' for serializer return value, got '{typeof(changes)}'`)
-		end
+local function changes_serialize(changes: TableChanges)
+	if not serialize then return end
+	local des = serialize(changes)
+	if typeof(changes) ~= serde_serialized_type then
+		error(`expected '{serde_serialized_type}' for serializer return value, got '{typeof(changes)}'`)
 	end
-	if fnName == "FireClient" then
-		fn(event, player, registerKey, changes)
-	else
-		fn(event, registerKey, changes)
-	end
+	return des
 end
 
 function ReplicatedRegistry.client.set_remote_instances(request_full: RemoteFunction, send_changes: RemoteEvent)
@@ -491,6 +467,23 @@ function ReplicatedRegistry.client.set_remote_instances(request_full: RemoteFunc
 	ReplicatedRegistry.request_full_remote_function = request_full
 	ReplicatedRegistry.default_changes_remote_event = send_changes
 	send_changes.OnClientEvent:Connect(ReplicatedRegistry.client.callbacks.remote_event_reciever)
+end
+
+function ReplicatedRegistry.client.to_server(registerKey: any, customEvent: Remote?, _changes: TableChanges?, _auto_commit: boolean?)
+	assert(IS_CLIENT, MUST_CLIENT)
+
+	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
+	assert(event, "RemoteEvent not specified")
+
+	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
+	if #changes == 0 then return end
+	
+	if _auto_commit == nil or _auto_commit == true then
+		ReplicatedRegistry.commit_changes(registerKey, changes)
+	end
+	if serialize then changes = changes_serialize(changes) end
+
+	(event::any):FireServer(registerKey, changes)
 end
 
 function ReplicatedRegistry.client.view(register_key: string): Table
@@ -522,7 +515,7 @@ function ReplicatedRegistry.client.view_as_proxy(register_key: string): Registre
 	
 	local proxy, changes = create_registree_proxy(tbl)
 	function proxy.replicate(r)
-		ReplicatedRegistry.send_changes("ToServer", register_key, nil, r, changes)
+		ReplicatedRegistry.client.to_server(register_key, r, changes)
 	end
 	
 	return proxy
@@ -530,6 +523,42 @@ end
 
 function ReplicatedRegistry.client.callbacks.remote_event_reciever(register_key: string, changes: TableChanges)
 	remote_event_reciever(nil, register_key, changes)
+end
+
+function ReplicatedRegistry.server.to_clients(registerKey: any, players: {Player}, customEvent: Remote?, _changes: TableChanges?, _auto_commit: boolean?)
+	assert(not IS_CLIENT, MUST_SERVER)
+
+	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
+	assert(event, "RemoteEvent not specified")
+
+	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
+	if #changes == 0 then return end
+	
+	if _auto_commit == nil or _auto_commit == true then
+		ReplicatedRegistry.commit_changes(registerKey, changes)
+	end
+	if serialize then changes = changes_serialize(changes) end
+	
+	for _, player in players do
+		(event::any):FireClient(player, registerKey, changes)
+	end
+end
+
+function ReplicatedRegistry.server.to_all_clients(registerKey: any, customEvent: Remote?, _changes: TableChanges?, _auto_commit: boolean?)
+	assert(not IS_CLIENT, MUST_SERVER)
+
+	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
+	assert(event, "RemoteEvent not specified")
+
+	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
+	if #changes == 0 then return end
+	
+	if _auto_commit == nil or _auto_commit == true then
+		ReplicatedRegistry.commit_changes(registerKey, changes)
+	end
+	if serialize then changes = changes_serialize(changes) end
+	
+	(event::any):FireAllClients(registerKey, changes)
 end
 
 function ReplicatedRegistry.server.set_remote_instances(request_full: RemoteFunction, send_changes: RemoteEvent)
@@ -544,16 +573,16 @@ function ReplicatedRegistry.server.view(register_key: string): Table
 	return assert(registrees[register_key], `Registree '{register_key}' does not exist.`).value
 end
 
-function ReplicatedRegistry.server.view_as_proxy(register_key: string): RegistreeInterface<any, (Player?, RemoteEvent?)>
+function ReplicatedRegistry.server.view_as_proxy(register_key: string): RegistreeInterface<any, ({Player}?, RemoteEvent?)>
 	assert(not IS_CLIENT, MUST_SERVER)
 	local tbl = ReplicatedRegistry.server.view(register_key)
 	
 	local proxy, changes = create_registree_proxy(tbl)
-	function proxy.replicate(plr, r)
-		if not plr then
-			ReplicatedRegistry.send_changes("ToAllClients", register_key, nil, r, changes)
+	function proxy.replicate(plrs, r)
+		if not plrs or #plrs == 0 then
+			ReplicatedRegistry.server.to_all_clients(register_key, r, changes)
 		else
-			ReplicatedRegistry.send_changes("ToClient", register_key, plr, r, changes)
+			ReplicatedRegistry.server.to_clients(register_key, plrs, r, changes)
 		end
 	end
 
