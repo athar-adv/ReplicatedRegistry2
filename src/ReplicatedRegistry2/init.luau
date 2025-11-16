@@ -2,7 +2,63 @@
 --!optimize 2
 
 local RunService = game:GetService("RunService")
-local Signal = require("@self/Signal")
+
+local Signal do
+	--Signal.luau (props to ffrostfall for this one)
+	local function connect<T...>(tbl: {(T...) -> ()}, item: (T...) -> ()): RBXScriptConnection
+		table.insert(tbl, item)
+		return {
+			Connected = false,
+			Disconnect = function(self)
+				local idx = table.find(tbl, item)
+				if idx then
+					table.remove(tbl, idx)
+				end
+			end,
+		} :: any
+	end
+
+	local freeThread: thread?
+	local function handler(tracker: Table, fns: Table, ...: any)
+		local ref = freeThread
+		freeThread = nil
+
+		while tracker.n ~= 0 do
+			local n = tracker.n
+			tracker.n -= 1
+			fns[n](...)
+		end
+
+		freeThread = ref
+	end
+
+	local function yieldLoop()
+		while true do
+			handler(coroutine.yield())
+		end
+	end
+
+	local function fire<T...>(tbl: {(T...) -> ()}, ...: T...)
+		local n = #tbl
+		if n == 0 then return end
+
+		local tracker = {
+			n = n
+		}
+		while tracker.n ~= 0 do
+			if not freeThread then
+				freeThread = task.spawn(yieldLoop)
+			end
+
+			task.spawn(freeThread :: thread, tracker, tbl, ...)
+		end
+	end
+	
+	Signal = {
+		fire = fire,
+		connect = connect
+	}
+end
 
 export type Table = {[any]: any}
 export type FrozenTable = {[never]: any}
@@ -34,17 +90,10 @@ export type RegistreeInterface<T=Table, ReplicateArgs...=()> = {
 	replicate: (ReplicateArgs...) -> (),
 	full: () -> T & FrozenTable,
 }
-export type ReplicationMode = "ToClient" | "ToAllClients" | "ToServer"
 
-local L = "#"
 local IS_CLIENT = RunService:IsClient()
 local MUST_SERVER = "Function cannot be called from client."
 local MUST_CLIENT = "Function cannot be called from server."
-local REPLICATION_MODE_REMAP = {
-	ToAllClients = "FireAllClients",
-	ToClient = "FireClient",
-	ToServer = "FireServer"
-}
 
 -- For storing register keys which shouldn't be processed (maybe because of a caught error)
 local inactiveKeys = {}
@@ -163,15 +212,6 @@ local function diff_changes(changed: (value: any, path: {any}) -> (), current: T
 			changed(nil, newPath)
 		end
 	end
-end
-
-local function ensure(tbl: Table, key: any, default: any)
-	local t = tbl[key]
-	if t then return t end
-	
-	local t = default
-	tbl[key] = t
-	return t
 end
 
 local NO_CHANGE = newproxy()
