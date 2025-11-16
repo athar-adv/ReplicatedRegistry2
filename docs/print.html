@@ -378,7 +378,7 @@ local currentCoins = proxy.get("coins")
 proxy.replicate()
 
 -- Or replicate to specific player
-proxy.replicate(player)
+proxy.replicate {player}
 </code></pre>
 <h3 id="modifying-and-sending-from-client"><a class="header" href="#modifying-and-sending-from-client">Modifying and Sending from Client</a></h3>
 <pre><code class="language-lua">-- Client-side modification (if server accepts it)
@@ -1196,7 +1196,7 @@ local function addCoins(player: Player, amount: number)
     local proxy = ReplicatedRegistry.server.view_as_proxy(key)
     
     proxy.incr("coins")(amount)
-    proxy.replicate(player)
+    proxy.replicate {player}
 end
 
 -- Example: Level up system
@@ -1214,7 +1214,7 @@ local function checkLevelUp(player: Player)
         proxy.incr("stats", "speed")(2)
         proxy.incr("stats", "defense")(2)
         
-        proxy.replicate(player)
+        proxy.replicate {player}
     end
 end
 </code></pre>
@@ -1519,7 +1519,7 @@ local function addItem(player: Player, itemId: string, quantity: number)
         proxy.set("items")(inventory.items)
     end
     
-    proxy.replicate(player)
+    proxy.replicate {player}
     return true
 end
 

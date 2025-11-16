@@ -312,7 +312,7 @@ local function addCoins(player: Player, amount: number)
     local proxy = ReplicatedRegistry.server.view_as_proxy(key)
     
     proxy.incr("coins")(amount)
-    proxy.replicate(player)
+    proxy.replicate {player}
 end
 
 -- Example: Level up system
@@ -330,7 +330,7 @@ local function checkLevelUp(player: Player)
         proxy.incr("stats", "speed")(2)
         proxy.incr("stats", "defense")(2)
         
-        proxy.replicate(player)
+        proxy.replicate {player}
     end
 end
 </code></pre>
@@ -635,7 +635,7 @@ local function addItem(player: Player, itemId: string, quantity: number)
         proxy.set("items")(inventory.items)
     end
     
-    proxy.replicate(player)
+    proxy.replicate {player}
     return true
 end
 

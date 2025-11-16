@@ -320,7 +320,7 @@ local currentCoins = proxy.get("coins")
 proxy.replicate()
 
 -- Or replicate to specific player
-proxy.replicate(player)
+proxy.replicate {player}
 </code></pre>
 <h3 id="modifying-and-sending-from-client"><a class="header" href="#modifying-and-sending-from-client">Modifying and Sending from Client</a></h3>
 <pre><code class="language-lua">-- Client-side modification (if server accepts it)
