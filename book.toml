@@ -1,0 +1,31 @@
+[book]
+title = "ReplicatedRegistry2 Docs"
+description = "Documentation for ReplicatedRegistry2 - A client-server synchronized table registry module for Roblox"
+authors = ["athar_adv"]
+language = "en"
+multilingual = false
+src = "docs_md"
+
+[build]
+build-dir = "docs"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/athar-adv/ReplicatedRegistry2"
+
+[output.html.playground]
+editable = false
+copyable = true
+copy-js = true
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
