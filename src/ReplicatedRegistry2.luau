@@ -62,8 +62,7 @@ local Signal do
 end
 
 export type Table = {[any]: any}
-export type FrozenTable = {[never]: any}
-export type Filter = (sender: Player?, path: {any}, value: any) -> boolean
+export type Filter = (sender: Player?, registry_key: any, old_tbl: Table, changes: TableChanges) -> boolean
 type Sender_Client = (register_key: any, changes: TableChanges) -> ()
 type Sender_Server = (plr: Player, register_key: any, changes: TableChanges) -> ()
 type RequestFull = (register_key: any) -> TableChanges?
@@ -92,7 +91,7 @@ export type RegistreeInterface<T=Table, ReplicateArgs...=()> = {
 	get: (...any) -> any,
 	incr: (...any) -> (number) -> (),
 	replicate: (ReplicateArgs...) -> (),
-	full: () -> T & FrozenTable,
+	full: () -> T,
 }
 
 local IS_CLIENT = RunService:IsClient()
@@ -341,18 +340,17 @@ local function remote_event_reciever(player: Player?, register_key: any, changes
 	local filter = registree.filter
 	local registerTable = registree.value
 	local onRecievedSignal = registree.onRecievedListeners
-
+	
+	if filter then
+		if not filter(player, register_key, registerTable, changes) then
+			return
+		end
+	end
 	for i, change in changes do
 		local value, path = change.v, change.p
 		if type(path) ~= "table" then
 			disableKey(registree, register_key, "TableChanges was not of valid structure: path was of incorrect type")
 			return
-		end
-		if filter then
-			local accepted = filter(player, path, value)
-			if not accepted then
-				changes[i] = NO_CHANGE
-			end
 		end
 	end
 
@@ -615,6 +613,28 @@ function ReplicatedRegistry.server.register<T>(register_key: any, registree_valu
 	}
 	
 	registrees[register_key] = reg
+end
+
+function ReplicatedRegistry.server.deregister<T>(register_key: any, _auto_replicate: boolean?)
+	assert(not IS_CLIENT, MUST_SERVER)
+	
+	local reg = registrees[registrees]
+	table.clear(reg.onRecievedListeners)
+	
+	if _auto_replicate == nil or _auto_replicate == true then
+		local changes = {}
+		diff_changes(
+			function(v, p)
+				table.insert(changes, {v = v, p = p})
+			end,
+			{},
+			reg.value,
+			{}
+		)
+		ReplicatedRegistry.server.to_clients(register_key, Players:GetPlayers(), nil, changes)
+	end
+	
+	registrees[register_key] = nil
 end
 
 function ReplicatedRegistry.server.callbacks.remote_event_reciever(plr: Player, register_key: any, changes: TableChanges)
