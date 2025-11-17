@@ -19,7 +19,3 @@
 - [Player Data](./example_player_data.md)
 - [ProfileStore Integration](./example_profilestore.md)
 - [Shared Data](./example_shared_data.md)
-
-# Advanced
-
-- [Advanced Usage](./advanced_usage.md)

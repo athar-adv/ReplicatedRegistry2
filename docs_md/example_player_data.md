@@ -8,32 +8,34 @@ A complete example of synchronizing player data between server and client.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local server = ReplicatedRegistry.server
 
 -- Setup remotes
-ReplicatedRegistry.server.set_remote_instances(
+server.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
 
 -- Custom validation
-ReplicatedRegistry.server.callbacks.validate_full_request = function(player, key)
+server.callbacks.validate_full_request = function(player, key)
     -- Only allow players to access their own data
     return key == player.UserId
 end
 
--- Filter for player data
 local playerDataFilter = ReplicatedRegistry.get_filter({
     rate_limit = 10, -- Max 10 updates per second
-    custom = function(sender, path, value)
-        -- Validate that sender owns this data
-        local userId = path[1]
-        if sender.UserId ~= userId then
+    custom = function(sender, register_key, tbl, changes)
+    -- Player can only access their own keys
+        if sender.UserId ~= register_key then
             return false
         end
         
-        -- Prevent negative coins
-        if path[2] == "coins" and type(value) == "number" and value < 0 then
-            return false
+        for _, c in changes do
+            local value, path = c.v, c.p
+            -- Prevent negative coins
+            if path[1] == "coins" and type(value) == "number" and value < 0 then
+                return false
+            end
         end
         
         return true
@@ -55,7 +57,7 @@ Players.PlayerAdded:Connect(function(player)
     }
     
     -- Register for replication
-    ReplicatedRegistry.server.register(key, playerData, playerDataFilter)
+    server.register(key, playerData, playerDataFilter)
     
     -- Listen for changes from client
     ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
@@ -64,18 +66,13 @@ Players.PlayerAdded:Connect(function(player)
             print(`  {table.concat(change.p, ".")} = {change.v}`)
         end
         
-        -- Auto-save or validate
         savePlayerData(sender, tbl)
     end)
-    
-    -- Send initial data to client
-    task.wait(0.5) -- Wait for client to be ready
-    ReplicatedRegistry.server.to_clients(key, {player})
 end)
 
 Players.PlayerRemoving:Connect(function(player)
     local key = player.UserId
-    local data = ReplicatedRegistry.server.view(key)
+    local data = server.view(key)
     
     -- Save before player leaves
     savePlayerData(player, data)
@@ -83,7 +80,7 @@ end)
 
 -- Example: Give coins to player
 function giveCoins(player, amount)
-    local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
+    local proxy = server.view_as_proxy(player.UserId)
     
     proxy.incr("coins")(amount)
     proxy.replicate({player}) -- Send to client
@@ -91,12 +88,12 @@ end
 
 -- Example: Update player level
 function levelUp(player)
-    local data = ReplicatedRegistry.server.view(player.UserId)
+    local data = server.view(player.UserId)
     
     data.level += 1
     data.coins += data.level * 10 -- Bonus coins
     
-    ReplicatedRegistry.server.to_clients(player.UserId, {player})
+    server.to_clients(player.UserId, {player})
 end
 ```
 
@@ -106,9 +103,10 @@ end
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local client = ReplicatedRegistry.client
 
 -- Setup remotes
-ReplicatedRegistry.client.set_remote_instances(
+client.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -117,7 +115,7 @@ local player = Players.LocalPlayer
 local key = player.UserId
 
 -- Access player data
-local playerData = ReplicatedRegistry.client.view(key)
+local playerData = client.view(key)
 
 -- Listen for updates from server
 ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
@@ -133,7 +131,7 @@ end)
 
 -- Example: Update settings
 function updateSettings(soundEnabled, musicEnabled)
-    local proxy = ReplicatedRegistry.client.view_as_proxy(key)
+    local proxy = client.view_as_proxy(key)
     
     proxy.set("settings", "sound")(soundEnabled)
     proxy.set("settings", "music")(musicEnabled)
@@ -143,14 +141,14 @@ end
 
 -- Example: Purchase item
 function purchaseItem(itemName, cost)
-    local data = ReplicatedRegistry.client.view(key)
+    local data = client.view(key)
     
     if data.coins >= cost then
         data.coins -= cost
         data.inventory[itemName] = true
         
         -- Send to server for validation
-        ReplicatedRegistry.client.to_server(key)
+        client.to_server(key)
     else
         warn("Not enough coins!")
     end
