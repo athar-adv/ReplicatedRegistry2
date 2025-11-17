@@ -1,6 +1,7 @@
 --!strict
 --!optimize 2
 
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Signal do
@@ -19,7 +20,7 @@ local Signal do
 	end
 
 	local freeThread: thread?
-	local function handler(tracker: Table, fns: Table, ...: any)
+	local function handler(tracker: {n: number}, fns: Table, ...: any)
 		local ref = freeThread
 		freeThread = nil
 
@@ -63,7 +64,10 @@ end
 export type Table = {[any]: any}
 export type FrozenTable = {[never]: any}
 export type Filter = (sender: Player?, path: {any}, value: any) -> boolean
-type Remote = UnreliableRemoteEvent | RemoteEvent
+type Sender_Client = (register_key: any, changes: TableChanges) -> ()
+type Sender_Server = (plr: Player, register_key: any, changes: TableChanges) -> ()
+type RequestFull = (register_key: any) -> TableChanges?
+type RequestFullInit = ((plr: Player, register_key: any) -> Table?) -> ()
 type FilterList = {
 	player_blacklist: {number}?,
 	player_whitelist: {number}?,
@@ -97,11 +101,7 @@ local MUST_CLIENT = "Function cannot be called from server."
 
 -- For storing register keys which shouldn't be processed (maybe because of a caught error)
 local inactiveKeys = {}
-local registrees: {[any]: Registree<any>} = {}
-
-local serialize: ((changes: TableChanges) -> any)? = nil
-local deserialize: ((serialized: any) -> TableChanges)? = nil
-local serde_serialized_type: string? = nil
+local registrees: {[any]: Registree} = {}
 
 local replication_filters = {
 	player_blacklist = function(blacklist: {number})
@@ -138,6 +138,7 @@ local replication_filters = {
 		end
 	end,
 }
+
 local default_callbacks = {
 	on_request_with_validate_key = function(plr: Player, key: any)
 		if not replication_filters.rate_limit(5) (plr) then return false end
@@ -164,15 +165,13 @@ local default_callbacks = {
 	-- Callback to be called whenever a remote event is recieved from the other side. Should return a string indicating what to do.
 	-- If the first return value is <code>"disable"</code>, then you can optionally return a 2nd value for the reason of disabling.
 	on_changes_recieved = function(sender: Player?, register_key: any, changes: TableChanges): ("pass" | "return" | "disable", string?)
-		return "pass"
+		return "pass", nil
 	end
 }
 
 local ReplicatedRegistry = {
 	filters = replication_filters,
 	registrees = registrees,
-	request_full_remote_function = nil :: RemoteFunction?,
-	default_changes_remote_event = nil :: RemoteEvent?,
 	callbacks = {
 		on_changes_recieved = default_callbacks.on_changes_recieved,
 		on_key_disabled = default_callbacks.on_key_disable,
@@ -181,11 +180,15 @@ local ReplicatedRegistry = {
 	
 	server = {
 		callbacks = {
-			validate_full_request = default_callbacks.on_request
+			validate_full_request = default_callbacks.on_request,
+			default_send_changes = nil :: Sender_Server?,
 		}
 	},
 	client = {
-		callbacks = {}
+		callbacks = {
+			default_send_changes = nil :: Sender_Client?,
+			request_full = nil :: RequestFull?,
+		}
 	},
 	meta = {}
 }
@@ -317,13 +320,7 @@ local function remoteFilter(player: Player?, register_key: any, changes: TableCh
 	elseif result ~= "pass" then
 		disableKey(registree, register_key, "OnRemoteRecieveCallback returned a string other than 'return | disable | pass'")
 	end
-
-	if serde_serialized_type and deserialize and typeof(changes) == serde_serialized_type then
-		return deserialize(changes)
-	elseif typeof(changes) ~= "table" then
-		disableKey(registree, register_key, "type of TableChanges was not serde_serializedType nor 'table'")
-		return nil
-	end
+	
 	return true
 end
 
@@ -409,29 +406,6 @@ function ReplicatedRegistry.on_recieve(register_key: string, fn: (sender: Player
 end
 
 --[[
-	<strong>THIS FUNCTION NEEDS TO BE CALLED FOR BOTH THE CLIENT AND SERVER IF YOU WANT BOTH SIDES TO SERDE PROPERLY</strong>
-	Sets ser/des functions to be called for everytime <code>TableChanges</code> are sent over the network.
-	
-	@param serializedType: The type of the value returned by <code>ser</code>, must not be <code>"table"</code>.
-	@param ser: The serializer for <code>TableChanges</code>, must return a value that is of type <code>serializedType</code>.
-	@param des: The deserialized for serialized <code>TableChanges</code>. Must return the original <code>TableChanges</code> otherwise all register keys will be disabled.
-]]
-function ReplicatedRegistry.set_change_serde(serializedType: string?, ser: ((changes: TableChanges) -> any)?, des: ((serialized: any) -> TableChanges)?)
-	assert(serializedType ~= "table", "serializedType is not allowed to be 'table' to keep differentiation between serialized and unserialized changes cheap.")
-	if serializedType == nil or ser == nil or des == nil then
-		serde_serialized_type = nil
-		serialize = nil
-		deserialize = nil
-		return
-	end
-	assert(serializedType and ser and des, "if one argument is nil, all must be nil.")
-
-	serde_serialized_type = serializedType
-	serialize = ser
-	deserialize = des
-end
-
---[[
 	Calculates all pending changes for a registered table.
 	
 	@param registerKey: The unique identifier for the table
@@ -494,27 +468,31 @@ function ReplicatedRegistry.revert_changes(registerKey: any, changes: TableChang
 	end
 end
 
-local function changes_serialize(changes: TableChanges)
-	if not serialize then return end
-	local des = serialize(changes)
-	if typeof(changes) ~= serde_serialized_type then
-		error(`expected '{serde_serialized_type}' for serializer return value, got '{typeof(changes)}'`)
-	end
-	return des
-end
-
 function ReplicatedRegistry.client.set_remote_instances(request_full: RemoteFunction, send_changes: RemoteEvent)
-	assert(IS_CLIENT, MUST_CLIENT)
-	ReplicatedRegistry.request_full_remote_function = request_full
-	ReplicatedRegistry.default_changes_remote_event = send_changes
-	send_changes.OnClientEvent:Connect(ReplicatedRegistry.client.callbacks.remote_event_reciever)
+	ReplicatedRegistry.client.set_remote_callbacks(
+		function(...)
+			return request_full:InvokeServer(...)
+		end,
+		function(...)
+			send_changes:FireServer(...)
+		end,
+		function(reciever)
+			send_changes.OnClientEvent:Connect(reciever)
+		end
+	)
 end
 
-function ReplicatedRegistry.client.to_server(registerKey: any, customEvent: Remote?, _changes: TableChanges?, _auto_commit: boolean?)
-	assert(IS_CLIENT, MUST_CLIENT)
+function ReplicatedRegistry.client.set_remote_callbacks(request_full: RequestFull, send_changes: Sender_Client, connect_change_reciever: (reciever: (register_key: any, changes: TableChanges) -> ()) -> () )
+	ReplicatedRegistry.client.callbacks.request_full = request_full
+	ReplicatedRegistry.client.callbacks.default_send_changes = send_changes
+	connect_change_reciever(ReplicatedRegistry.client.callbacks.remote_event_reciever)
+end
 
-	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
-	assert(event, "RemoteEvent not specified")
+function ReplicatedRegistry.client.to_server(registerKey: any, _sender: Sender_Client?, _changes: TableChanges?, _auto_commit: boolean?)
+	assert(IS_CLIENT, MUST_CLIENT)
+	
+	local sender = _sender or ReplicatedRegistry.client.callbacks.default_send_changes
+	assert(sender, "sender not specified")
 
 	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
 	if #changes == 0 then return end
@@ -522,17 +500,16 @@ function ReplicatedRegistry.client.to_server(registerKey: any, customEvent: Remo
 	if _auto_commit == nil or _auto_commit == true then
 		ReplicatedRegistry.commit_changes(registerKey, changes)
 	end
-	if serialize then changes = changes_serialize(changes) end
-
-	(event::any):FireServer(registerKey, changes)
+	
+	sender(registerKey, changes)
 end
 
-function ReplicatedRegistry.client.view(register_key: string): Table
+function ReplicatedRegistry.client.view(register_key: any): Table
 	assert(IS_CLIENT, MUST_CLIENT)
 	local registree = registrees[register_key]
 	if not registree then
-		assert(ReplicatedRegistry.request_full_remote_function, "ReplicatedRegistry.request_full_remote_function must be set in order to use client.view for the first time")
-		local tbl = ReplicatedRegistry.request_full_remote_function:InvokeServer(register_key)
+		assert(ReplicatedRegistry.client.callbacks.request_full, "ReplicatedRegistry.request_full_remote_function must be set in order to use client.view for the first time")
+		local tbl = ReplicatedRegistry.client.callbacks.request_full(register_key)
 
 		assert(tbl, `Registree '{register_key}' couldn't be accessed.`)
 		local reg: Registree = {
@@ -550,7 +527,7 @@ function ReplicatedRegistry.client.view(register_key: string): Table
 	return registree.value
 end
 
-function ReplicatedRegistry.client.view_as_proxy(register_key: string): RegistreeInterface<any, (RemoteEvent?)>
+function ReplicatedRegistry.client.view_as_proxy(register_key: any): RegistreeInterface<any, (RemoteEvent?)>
 	assert(IS_CLIENT, MUST_CLIENT)
 	local tbl = ReplicatedRegistry.client.view(register_key)
 	
@@ -562,15 +539,15 @@ function ReplicatedRegistry.client.view_as_proxy(register_key: string): Registre
 	return proxy
 end
 
-function ReplicatedRegistry.client.callbacks.remote_event_reciever(register_key: string, changes: TableChanges)
+function ReplicatedRegistry.client.callbacks.remote_event_reciever(register_key: any, changes: TableChanges)
 	remote_event_reciever(nil, register_key, changes)
 end
 
-function ReplicatedRegistry.server.to_clients(registerKey: any, players: {Player}, customEvent: Remote?, _changes: TableChanges?, _auto_commit: boolean?)
+function ReplicatedRegistry.server.to_clients(registerKey: any, players: {Player}, _sender: Sender_Server?, _changes: TableChanges?, _auto_commit: boolean?)
 	assert(not IS_CLIENT, MUST_SERVER)
 
-	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
-	assert(event, "RemoteEvent not specified")
+	local sender = _sender or ReplicatedRegistry.server.callbacks.default_send_changes
+	assert(sender, "sender not specified")
 
 	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
 	if #changes == 0 then return end
@@ -578,50 +555,46 @@ function ReplicatedRegistry.server.to_clients(registerKey: any, players: {Player
 	if _auto_commit == nil or _auto_commit == true then
 		ReplicatedRegistry.commit_changes(registerKey, changes)
 	end
-	if serialize then changes = changes_serialize(changes) end
 	
 	for _, player in players do
-		(event::any):FireClient(player, registerKey, changes)
+		sender(player, registerKey, changes)
 	end
-end
-
-function ReplicatedRegistry.server.to_all_clients(registerKey: any, customEvent: Remote?, _changes: TableChanges?, _auto_commit: boolean?)
-	assert(not IS_CLIENT, MUST_SERVER)
-
-	local event = customEvent or ReplicatedRegistry.default_changes_remote_event
-	assert(event, "RemoteEvent not specified")
-
-	local changes = _changes or ReplicatedRegistry.get_changes(registerKey)
-	if #changes == 0 then return end
-	
-	if _auto_commit == nil or _auto_commit == true then
-		ReplicatedRegistry.commit_changes(registerKey, changes)
-	end
-	if serialize then changes = changes_serialize(changes) end
-	
-	(event::any):FireAllClients(registerKey, changes)
 end
 
 function ReplicatedRegistry.server.set_remote_instances(request_full: RemoteFunction, send_changes: RemoteEvent)
-	assert(not IS_CLIENT, MUST_SERVER)
-	ReplicatedRegistry.default_changes_remote_event = send_changes
-	send_changes.OnServerEvent:Connect(ReplicatedRegistry.server.callbacks.remote_event_reciever)
-	request_full.OnServerInvoke = ReplicatedRegistry.server.callbacks.request_full_handler
+	ReplicatedRegistry.server.set_remote_callbacks(
+		function(handler)
+			request_full.OnServerInvoke = handler
+		end,
+		function(...)
+			send_changes:FireClient(...)
+		end,
+		function(reciever)
+			send_changes.OnServerEvent:Connect(reciever)
+		end
+	)
 end
 
-function ReplicatedRegistry.server.view(register_key: string): Table
+function ReplicatedRegistry.server.set_remote_callbacks(request_full_init: RequestFullInit, send_changes: Sender_Server, connect_change_reciever: (reciever: (plr: Player, register_key: any, changes: TableChanges) -> ()) -> () )
+	assert(not IS_CLIENT, MUST_SERVER)
+	ReplicatedRegistry.server.callbacks.default_send_changes = send_changes
+	request_full_init(ReplicatedRegistry.server.callbacks.request_full_handler)
+	connect_change_reciever(ReplicatedRegistry.server.callbacks.remote_event_reciever)
+end
+
+function ReplicatedRegistry.server.view(register_key: any): Table
 	assert(not IS_CLIENT, MUST_SERVER)
 	return assert(registrees[register_key], `Registree '{register_key}' does not exist.`).value
 end
 
-function ReplicatedRegistry.server.view_as_proxy(register_key: string): RegistreeInterface<any, ({Player}?, RemoteEvent?)>
+function ReplicatedRegistry.server.view_as_proxy(register_key: any): RegistreeInterface<any, ({Player}?, RemoteEvent?)>
 	assert(not IS_CLIENT, MUST_SERVER)
 	local tbl = ReplicatedRegistry.server.view(register_key)
 	
 	local proxy, changes = create_registree_proxy(tbl)
 	function proxy.replicate(plrs, r)
 		if not plrs or #plrs == 0 then
-			ReplicatedRegistry.server.to_all_clients(register_key, r, changes)
+			ReplicatedRegistry.server.to_clients(register_key, Players:GetPlayers(), r, changes)
 		else
 			ReplicatedRegistry.server.to_clients(register_key, plrs, r, changes)
 		end
@@ -630,7 +603,7 @@ function ReplicatedRegistry.server.view_as_proxy(register_key: string): Registre
 	return proxy
 end
 
-function ReplicatedRegistry.server.register<T>(register_key: string, registree_value: T & Table, filter: Filter?)
+function ReplicatedRegistry.server.register<T>(register_key: any, registree_value: T & Table, filter: Filter?)
 	assert(not IS_CLIENT, MUST_SERVER)
 	local reg: Registree = {
 		value = registree_value,
@@ -643,17 +616,17 @@ function ReplicatedRegistry.server.register<T>(register_key: string, registree_v
 	registrees[register_key] = reg
 end
 
-function ReplicatedRegistry.server.callbacks.remote_event_reciever(plr: Player, register_key: string, changes: TableChanges)
+function ReplicatedRegistry.server.callbacks.remote_event_reciever(plr: Player, register_key: any, changes: TableChanges)
 	remote_event_reciever(plr, register_key, changes)
 end
 
-function ReplicatedRegistry.server.callbacks.request_full_handler(player: Player, registerKey: any)
-	if registerKey == nil then return end
-	if not ReplicatedRegistry.server.callbacks.validate_full_request(player, registerKey) then return end
+function ReplicatedRegistry.server.callbacks.request_full_handler(player: Player, registerKey: any): Table?
+	if registerKey == nil then return nil end
+	if not ReplicatedRegistry.server.callbacks.validate_full_request(player, registerKey) then return nil end
 	local registree = registrees[registerKey]
 	
 	if not registree then
-		return
+		return nil
 	end
 	return registree.value
 end
