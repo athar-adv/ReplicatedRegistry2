@@ -483,6 +483,7 @@ function ReplicatedRegistry.client.set_remote_instances(request_full: RemoteFunc
 end
 
 function ReplicatedRegistry.client.set_remote_callbacks(request_full: RequestFull, send_changes: Sender_Client, connect_change_reciever: (reciever: (register_key: any, changes: TableChanges) -> ()) -> () )
+	assert(IS_CLIENT, MUST_CLIENT)
 	ReplicatedRegistry.client.callbacks.request_full = request_full
 	ReplicatedRegistry.client.callbacks.default_send_changes = send_changes
 	connect_change_reciever(ReplicatedRegistry.client.callbacks.remote_event_reciever)
