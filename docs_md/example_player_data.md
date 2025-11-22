@@ -82,7 +82,7 @@ end)
 function giveCoins(player, amount)
     local proxy = server.view_as_proxy(player.UserId)
     
-    proxy.incr("coins")(amount)
+    proxy.incr({"coins"}, amount)
     proxy.replicate({player}) -- Send to client
 end
 
@@ -133,8 +133,8 @@ end)
 function updateSettings(soundEnabled, musicEnabled)
     local proxy = client.view_as_proxy(key)
     
-    proxy.set("settings", "sound")(soundEnabled)
-    proxy.set("settings", "music")(musicEnabled)
+    proxy.set({"settings", "sound"}, soundEnabled)
+    proxy.set({"settings", "music"}, musicEnabled)
     
     proxy.replicate() -- Send to server
 end

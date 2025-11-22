@@ -108,8 +108,8 @@ function giveReward(player, coins, xp)
     
     local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
     
-    proxy.incr("coins")(coins)
-    proxy.incr("level")(xp)
+    proxy.incr({"coins"}, coins)
+    proxy.incr({"level"}, xp)
     
     -- Replicate to player
     proxy.replicate({player})
@@ -132,7 +132,7 @@ function recordKill(player)
     if not profile then return end
     
     local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
-    proxy.incr("stats", "kills")(1)
+    proxy.incr({"stats", "kills"}, 1)
     proxy.replicate({player})
 end
 ```

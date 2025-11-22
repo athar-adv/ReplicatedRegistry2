@@ -47,15 +47,15 @@ Returns a proxy interface with helper methods.
 local proxy = ReplicatedRegistry.server.view_as_proxy("player_123")
 
 -- Set values
-proxy.set("coins")(200)
-proxy.set("inventory", "sword")(true)
+proxy.set({"coins"}, 200)
+proxy.set({"inventory", "sword"}, true)
 
 -- Get values
-local coins = proxy.get("coins")
+local coins = proxy.get({"coins"})
 
 -- Increment values
-proxy.incr("coins")(50)
-proxy.incr("level")(1)
+proxy.incr({"coins"}, 50)
+proxy.incr({"level"}, 1)
 
 -- Replicate to specific players
 proxy.replicate({player1, player2})

@@ -48,8 +48,8 @@ function updateLeaderboard()
         top10[i] = players[i]
     end
     
-    proxy.set("topPlayers")(top10)
-    proxy.set("lastUpdate")(os.time())
+    proxy.set({"topPlayers"}, top10)
+    proxy.set({"lastUpdate"}, os.time())
     
     -- Broadcast to all players
     proxy.replicate()
@@ -136,7 +136,7 @@ function updateGameSettings(newSettings)
     local proxy = ReplicatedRegistry.server.view_as_proxy("game_settings")
     
     for key, value in newSettings do
-        proxy.set(key)(value)
+        proxy.set({key}, value)
     end
     
     -- Broadcast to everyone
@@ -184,7 +184,7 @@ if isAdmin(Players.LocalPlayer) then
     -- Admin can change settings
     function changeRoundTime(newTime)
         local proxy = ReplicatedRegistry.client.view_as_proxy("game_settings")
-        proxy.set("roundTime")(newTime)
+        proxy.set({"roundTime"}, newTime)
         proxy.replicate()
     end
 end
@@ -219,7 +219,7 @@ ReplicatedRegistry.server.register("team_data", teams, filter)
 function addTeamScore(teamName, points)
     local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
     
-    proxy.incr(teamName, "score")(points)
+    proxy.incr({teamName, "score"}, points)
     proxy.replicate() -- Broadcast to all
 end
 
@@ -228,7 +228,7 @@ Players.PlayerAdded:Connect(function(player)
     local team = getPlayerTeam(player)
     local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
     
-    proxy.incr(team, "players")(1)
+    proxy.incr({team, "players"}, 1)
     proxy.replicate()
 end)
 ```
