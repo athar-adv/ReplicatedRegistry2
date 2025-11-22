@@ -284,8 +284,8 @@ function giveReward(player, coins, xp)
     
     local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
     
-    proxy.incr("coins")(coins)
-    proxy.incr("level")(xp)
+    proxy.incr({"coins"}, coins)
+    proxy.incr({"level"}, xp)
     
     -- Replicate to player
     proxy.replicate({player})
@@ -308,7 +308,7 @@ function recordKill(player)
     if not profile then return end
     
     local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
-    proxy.incr("stats", "kills")(1)
+    proxy.incr({"stats", "kills"}, 1)
     proxy.replicate({player})
 end
 </code></pre>
@@ -406,22 +406,6 @@ end
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 

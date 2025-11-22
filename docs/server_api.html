@@ -210,15 +210,15 @@ data.level = 2
 <pre><code class="language-lua">local proxy = ReplicatedRegistry.server.view_as_proxy("player_123")
 
 -- Set values
-proxy.set("coins")(200)
-proxy.set("inventory", "sword")(true)
+proxy.set({"coins"}, 200)
+proxy.set({"inventory", "sword"}, true)
 
 -- Get values
-local coins = proxy.get("coins")
+local coins = proxy.get({"coins"})
 
 -- Increment values
-proxy.incr("coins")(50)
-proxy.incr("level")(1)
+proxy.incr({"coins"}, 50)
+proxy.incr({"level"}, 1)
 
 -- Replicate to specific players
 proxy.replicate({player1, player2})
@@ -292,22 +292,6 @@ ReplicatedRegistry.revert_changes("player_123")
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 

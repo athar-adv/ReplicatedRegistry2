@@ -301,15 +301,15 @@ data.level = 2
 <pre><code class="language-lua">local proxy = ReplicatedRegistry.server.view_as_proxy("player_123")
 
 -- Set values
-proxy.set("coins")(200)
-proxy.set("inventory", "sword")(true)
+proxy.set({"coins"}, 200)
+proxy.set({"inventory", "sword"}, true)
 
 -- Get values
-local coins = proxy.get("coins")
+local coins = proxy.get({"coins"})
 
 -- Increment values
-proxy.incr("coins")(50)
-proxy.incr("level")(1)
+proxy.incr({"coins"}, 50)
+proxy.incr({"level"}, 1)
 
 -- Replicate to specific players
 proxy.replicate({player1, player2})
@@ -368,14 +368,14 @@ playerData.coins = 150
 <pre><code class="language-lua">local proxy = ReplicatedRegistry.client.view_as_proxy("player_123")
 
 -- Set values
-proxy.set("coins")(200)
-proxy.set("inventory", "sword")(true)
+proxy.set({"coins"}, 200)
+proxy.set({"inventory", "sword"}, true)
 
 -- Get values
-local coins = proxy.get("coins")
+local coins = proxy.get({"coins"})
 
 -- Increment values
-proxy.incr("coins")(50)
+proxy.incr({"coins"}, 50)
 
 -- Replicate changes to server
 proxy.replicate()
@@ -809,7 +809,7 @@ end)
 function giveCoins(player, amount)
     local proxy = server.view_as_proxy(player.UserId)
     
-    proxy.incr("coins")(amount)
+    proxy.incr({"coins"}, amount)
     proxy.replicate({player}) -- Send to client
 end
 
@@ -857,8 +857,8 @@ end)
 function updateSettings(soundEnabled, musicEnabled)
     local proxy = client.view_as_proxy(key)
     
-    proxy.set("settings", "sound")(soundEnabled)
-    proxy.set("settings", "music")(musicEnabled)
+    proxy.set({"settings", "sound"}, soundEnabled)
+    proxy.set({"settings", "music"}, musicEnabled)
     
     proxy.replicate() -- Send to server
 end
@@ -984,8 +984,8 @@ function giveReward(player, coins, xp)
     
     local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
     
-    proxy.incr("coins")(coins)
-    proxy.incr("level")(xp)
+    proxy.incr({"coins"}, coins)
+    proxy.incr({"level"}, xp)
     
     -- Replicate to player
     proxy.replicate({player})
@@ -1008,7 +1008,7 @@ function recordKill(player)
     if not profile then return end
     
     local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
-    proxy.incr("stats", "kills")(1)
+    proxy.incr({"stats", "kills"}, 1)
     proxy.replicate({player})
 end
 </code></pre>
@@ -1121,8 +1121,8 @@ function updateLeaderboard()
         top10[i] = players[i]
     end
     
-    proxy.set("topPlayers")(top10)
-    proxy.set("lastUpdate")(os.time())
+    proxy.set({"topPlayers"}, top10)
+    proxy.set({"lastUpdate"}, os.time())
     
     -- Broadcast to all players
     proxy.replicate()
@@ -1202,7 +1202,7 @@ function updateGameSettings(newSettings)
     local proxy = ReplicatedRegistry.server.view_as_proxy("game_settings")
     
     for key, value in newSettings do
-        proxy.set(key)(value)
+        proxy.set({key}, value)
     end
     
     -- Broadcast to everyone
@@ -1247,7 +1247,7 @@ if isAdmin(Players.LocalPlayer) then
     -- Admin can change settings
     function changeRoundTime(newTime)
         local proxy = ReplicatedRegistry.client.view_as_proxy("game_settings")
-        proxy.set("roundTime")(newTime)
+        proxy.set({"roundTime"}, newTime)
         proxy.replicate()
     end
 end
@@ -1278,7 +1278,7 @@ ReplicatedRegistry.server.register("team_data", teams, filter)
 function addTeamScore(teamName, points)
     local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
     
-    proxy.incr(teamName, "score")(points)
+    proxy.incr({teamName, "score"}, points)
     proxy.replicate() -- Broadcast to all
 end
 
@@ -1287,7 +1287,7 @@ Players.PlayerAdded:Connect(function(player)
     local team = getPlayerTeam(player)
     local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
     
-    proxy.incr(team, "players")(1)
+    proxy.incr({team, "players"}, 1)
     proxy.replicate()
 end)
 </code></pre>
@@ -1318,22 +1318,6 @@ end)
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 
