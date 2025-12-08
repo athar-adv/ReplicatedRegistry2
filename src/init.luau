@@ -288,7 +288,7 @@ local function create_registree_proxy(register_key: any, tbl: Table, key_changed
 	local changes = {}
 	local key_changed_listeners: {[string]: {(...any) -> ()}} = {}
 	
-	local c = ReplicatedRegistry.on_recieve(register_key, function(sender, old_tbl, changes)
+	local c = ReplicatedRegistry.on_receive(register_key, function(sender, old_tbl, changes)
 		for _, c in changes do
 			local stringed = {}
 			for i, v in c.p do
@@ -460,7 +460,7 @@ end
     @param fn: The callback function to call when changes are received
     @return: An RBXScriptConnection representing the connection.
 ]]
-function ReplicatedRegistry.on_recieve(register_key: string, fn: (sender: Player?, tbl: Table, changes: TableChanges) -> ())
+function ReplicatedRegistry.on_receive(register_key: string, fn: (sender: Player?, tbl: Table, changes: TableChanges) -> ())
 	local registree = assert(registrees[register_key], `Registree '{register_key}' does not exist.`)
 	
 	return Signal.connect(registree.onRecievedListeners, fn)
@@ -566,14 +566,15 @@ function ReplicatedRegistry.client.to_server(registerKey: any, _sender: Sender_C
 	sender(registerKey, changes)
 end
 
-function ReplicatedRegistry.client.view(register_key: any): Table
+function ReplicatedRegistry.client.view(register_key: any): Table?
 	assert(IS_CLIENT, MUST_CLIENT)
 	local registree = registrees[register_key]
 	if not registree then
 		assert(ReplicatedRegistry.client.callbacks.request_full, "ReplicatedRegistry.request_full_remote_function must be set in order to use client.view for the first time")
 		local tbl = ReplicatedRegistry.client.callbacks.request_full(register_key)
-
-		assert(tbl, `Registree '{register_key}' couldn't be accessed.`)
+		
+		--assert(tbl, `Registree '{register_key}' couldn't be accessed.`)
+		if not tbl then return nil end
 		local reg: Registree = {
 			value = tbl,
 			copy = deep_copy(tbl),
@@ -589,9 +590,10 @@ function ReplicatedRegistry.client.view(register_key: any): Table
 	return registree.value
 end
 
-function ReplicatedRegistry.client.view_as_proxy(register_key: any)
+function ReplicatedRegistry.client.view_as_proxy(register_key: any): RegistreeInterface_Client?
 	assert(IS_CLIENT, MUST_CLIENT)
 	local tbl = ReplicatedRegistry.client.view(register_key)
+	if not tbl then return nil end
 	
 	local proxy: RegistreeInterface_Client, changes, key_changed_listeners = create_registree_proxy(register_key, tbl, function(l, s, o, v)
 		Signal.fire(l, o, v)
