@@ -180,17 +180,24 @@
                     <main>
                         <h1 id="client-api"><a class="header" href="#client-api">Client API</a></h1>
 <h2 id="accessing-tables"><a class="header" href="#accessing-tables">Accessing Tables</a></h2>
-<h3 id="clientviewkey"><a class="header" href="#clientviewkey"><code>client.view(key)</code></a></h3>
-<p>Requests and returns the registered table from the server.</p>
+<h3 id="clientviewkey-any---table"><a class="header" href="#clientviewkey-any---table"><code>client.view(key: any) -&gt; Table?</code></a></h3>
+<p>Requests and returns the registered table from the server, and nil if not registered yet.</p>
 <pre><code class="language-lua">local playerData = ReplicatedRegistry.client.view("player_123")
+assert(playerData, "playerData not registered yet!")
 print(playerData.coins) -- 100
 
 -- Modify locally
 playerData.coins = 150
 </code></pre>
-<h3 id="clientview_as_proxykey"><a class="header" href="#clientview_as_proxykey"><code>client.view_as_proxy(key)</code></a></h3>
+<h3 id="clientawait_viewkey-any---table"><a class="header" href="#clientawait_viewkey-any---table"><code>client.await_view(key: any) -&gt; Table</code></a></h3>
+<p>Yields the calling thread indefinitely until a Registree registered with <code>key</code> is created on the server.</p>
+<pre><code class="language-lua">local playerData = ReplicatedRegistry.client.await_view("player_123")
+print(playerData.coins) -- 100
+</code></pre>
+<h3 id="clientview_as_proxykey-any---registreeinterface_client"><a class="header" href="#clientview_as_proxykey-any---registreeinterface_client"><code>client.view_as_proxy(key: any) -&gt; RegistreeInterface_Client?</code></a></h3>
 <p>Returns a proxy interface with helper methods.</p>
 <pre><code class="language-lua">local proxy = ReplicatedRegistry.client.view_as_proxy("player_123")
+assert(proxy, "proxy not registered yet!")
 
 -- Set values
 proxy.set({"coins"}, 200)
@@ -208,8 +215,10 @@ proxy.replicate()
 -- Get full table
 local fullTable = proxy.full()
 </code></pre>
+<h3 id="clientawait_view_as_proxykey-any---registreeinterface_client"><a class="header" href="#clientawait_view_as_proxykey-any---registreeinterface_client"><code>client.await_view_as_proxy(key: any) -&gt; RegistreeInterface_Client</code></a></h3>
+<p>The same as <code>client.view_as_proxy</code> but yields the calling thread indefinitely until a registree with the key <code>key</code> exists.</p>
 <h2 id="replication"><a class="header" href="#replication">Replication</a></h2>
-<h3 id="clientto_serverkey-sender-changes-auto_commit"><a class="header" href="#clientto_serverkey-sender-changes-auto_commit"><code>client.to_server(key, sender?, changes?, auto_commit?)</code></a></h3>
+<h3 id="clientto_serverkey-any-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#clientto_serverkey-any-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><code>client.to_server(key: any, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
 <p>Sends changes to the server.</p>
 <pre><code class="language-lua">local data = ReplicatedRegistry.client.view("player_123")
 data.coins = 200
@@ -226,7 +235,7 @@ local changes = ReplicatedRegistry.get_changes("player_123")
 ReplicatedRegistry.client.to_server("player_123", nil, changes)
 </code></pre>
 <h2 id="listening-for-changes"><a class="header" href="#listening-for-changes">Listening for Changes</a></h2>
-<h3 id="on_recievekey-callback"><a class="header" href="#on_recievekey-callback"><code>on_recieve(key, callback)</code></a></h3>
+<h3 id="on_receivekey-any-callback-sender-player-old_table-table-changes-tablechanges------scriptconnection"><a class="header" href="#on_receivekey-any-callback-sender-player-old_table-table-changes-tablechanges------scriptconnection"><code>on_receive(key: any, callback: (sender: Player?, old_table: Table, changes: TableChanges) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
 <p>Listens for incoming changes from the server.</p>
 <pre><code class="language-lua">local connection = ReplicatedRegistry.on_recieve("player_123", function(sender, table, changes)
     print("Received changes from", sender)

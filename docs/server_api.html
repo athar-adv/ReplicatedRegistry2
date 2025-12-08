@@ -180,7 +180,7 @@
                     <main>
                         <h1 id="server-api"><a class="header" href="#server-api">Server API</a></h1>
 <h2 id="registering-tables"><a class="header" href="#registering-tables">Registering Tables</a></h2>
-<h3 id="serverregisterkey-table-filter"><a class="header" href="#serverregisterkey-table-filter"><code>server.register(key, table, filter?)</code></a></h3>
+<h3 id="serverregisterkey-any-table-table-filter-replicationfilter"><a class="header" href="#serverregisterkey-any-table-table-filter-replicationfilter"><code>server.register(key: any, table: Table, filter: ReplicationFilter?)</code></a></h3>
 <p>Registers a table on the server for replication.</p>
 <pre><code class="language-lua">local playerData = {
     coins = 100,
@@ -199,13 +199,16 @@ ReplicatedRegistry.server.register("player_123", playerData)
 ReplicatedRegistry.server.register("shared_data", sharedTable, filter)
 </code></pre>
 <h2 id="accessing-tables"><a class="header" href="#accessing-tables">Accessing Tables</a></h2>
-<h3 id="serverviewkey"><a class="header" href="#serverviewkey"><code>server.view(key)</code></a></h3>
+<h3 id="serverviewkey-any---table"><a class="header" href="#serverviewkey-any---table"><code>server.view(key: any) -&gt; Table?</code></a></h3>
 <p>Returns the registered table directly.</p>
 <pre><code class="language-lua">local data = ReplicatedRegistry.server.view("player_123")
+assert(data, "data not registered!")
 data.coins = 150
 data.level = 2
 </code></pre>
-<h3 id="serverview_as_proxykey"><a class="header" href="#serverview_as_proxykey"><code>server.view_as_proxy(key)</code></a></h3>
+<h3 id="serverawait_viewkey-any---table"><a class="header" href="#serverawait_viewkey-any---table"><code>server.await_view(key: any) -&gt; Table</code></a></h3>
+<p>Yields the calling thread indefinitely until a Registree registered with <code>key</code> is created.</p>
+<h3 id="serverview_as_proxykey-any---registreeinterface_server"><a class="header" href="#serverview_as_proxykey-any---registreeinterface_server"><code>server.view_as_proxy(key: any) -&gt; RegistreeInterface_Server?</code></a></h3>
 <p>Returns a proxy interface with helper methods.</p>
 <pre><code class="language-lua">local proxy = ReplicatedRegistry.server.view_as_proxy("player_123")
 
@@ -229,8 +232,10 @@ proxy.replicate()
 -- Get full table
 local fullTable = proxy.full()
 </code></pre>
+<h3 id="serverawait_view_as_proxykey-any---registreeinterface_server"><a class="header" href="#serverawait_view_as_proxykey-any---registreeinterface_server"><code>server.await_view_as_proxy(key: any) -&gt; RegistreeInterface_Server</code></a></h3>
+<p>The same as <code>server.view_as_proxy</code> but yields the calling thread indefinitely until a registree with the key <code>key</code> exists.</p>
 <h2 id="replication"><a class="header" href="#replication">Replication</a></h2>
-<h3 id="serverto_clientskey-players-sender-changes-auto_commit"><a class="header" href="#serverto_clientskey-players-sender-changes-auto_commit"><code>server.to_clients(key, players, sender?, changes?, auto_commit?)</code></a></h3>
+<h3 id="serverto_clientskey-any-players-player-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#serverto_clientskey-any-players-player-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><code>server.to_clients(key: any, players: {Player}, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
 <p>Sends changes to specified clients.</p>
 <pre><code class="language-lua">-- Replicate to specific players
 ReplicatedRegistry.server.to_clients(
@@ -245,18 +250,18 @@ ReplicatedRegistry.server.to_clients(
 )
 </code></pre>
 <h2 id="change-management"><a class="header" href="#change-management">Change Management</a></h2>
-<h3 id="get_changeskey"><a class="header" href="#get_changeskey"><code>get_changes(key)</code></a></h3>
+<h3 id="get_changeskey-any---"><a class="header" href="#get_changeskey-any---"><code>get_changes(key: any) -&gt; ()</code></a></h3>
 <p>Gets all pending changes since last commit.</p>
 <pre><code class="language-lua">local changes = ReplicatedRegistry.get_changes("player_123")
 -- changes = {{v = 150, p = {"coins"}}, {v = 2, p = {"level"}}}
 </code></pre>
-<h3 id="commit_changeskey-changes"><a class="header" href="#commit_changeskey-changes"><code>commit_changes(key, changes?)</code></a></h3>
+<h3 id="commit_changeskey-any-changes-tablechanges---"><a class="header" href="#commit_changeskey-any-changes-tablechanges---"><code>commit_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
 <p>Commits changes, updating the internal copy.</p>
 <pre><code class="language-lua">ReplicatedRegistry.commit_changes("player_123")
 </code></pre>
-<h3 id="revert_changeskey-changes"><a class="header" href="#revert_changeskey-changes"><code>revert_changes(key, changes?)</code></a></h3>
+<h3 id="revert_changeskey-any-changes-tablechanges---"><a class="header" href="#revert_changeskey-any-changes-tablechanges---"><code>revert_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
 <p>Reverts uncommitted changes.</p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.server.view("player_123")
+<pre><code class="language-lua">local data = ReplicatedRegistry.server.await_view("player_123")
 data.coins = 999 -- Oops, mistake
 
 ReplicatedRegistry.revert_changes("player_123")

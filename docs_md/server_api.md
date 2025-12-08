@@ -2,7 +2,7 @@
 
 ## Registering Tables
 
-### `server.register(key, table, filter?)`
+### `server.register(key: any, table: Table, filter: ReplicationFilter?)`
 
 Registers a table on the server for replication.
 
@@ -29,17 +29,22 @@ ReplicatedRegistry.server.register("shared_data", sharedTable, filter)
 
 ## Accessing Tables
 
-### `server.view(key)`
+### `server.view(key: any) -> Table?`
 
 Returns the registered table directly.
 
 ```lua
 local data = ReplicatedRegistry.server.view("player_123")
+assert(data, "data not registered!")
 data.coins = 150
 data.level = 2
 ```
 
-### `server.view_as_proxy(key)`
+### `server.await_view(key: any) -> Table`
+
+Yields the calling thread indefinitely until a Registree registered with `key` is created.
+
+### `server.view_as_proxy(key: any) -> RegistreeInterface_Server?`
 
 Returns a proxy interface with helper methods.
 
@@ -67,9 +72,13 @@ proxy.replicate()
 local fullTable = proxy.full()
 ```
 
+### `server.await_view_as_proxy(key: any) -> RegistreeInterface_Server`
+
+The same as `server.view_as_proxy` but yields the calling thread indefinitely until a registree with the key `key` exists.
+
 ## Replication
 
-### `server.to_clients(key, players, sender?, changes?, auto_commit?)`
+### `server.to_clients(key: any, players: {Player}, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -> ()`
 
 Sends changes to specified clients.
 
@@ -89,7 +98,7 @@ ReplicatedRegistry.server.to_clients(
 
 ## Change Management
 
-### `get_changes(key)`
+### `get_changes(key: any) -> ()`
 
 Gets all pending changes since last commit.
 
@@ -98,7 +107,7 @@ local changes = ReplicatedRegistry.get_changes("player_123")
 -- changes = {{v = 150, p = {"coins"}}, {v = 2, p = {"level"}}}
 ```
 
-### `commit_changes(key, changes?)`
+### `commit_changes(key: any, changes: TableChanges?) -> ()`
 
 Commits changes, updating the internal copy.
 
@@ -106,12 +115,12 @@ Commits changes, updating the internal copy.
 ReplicatedRegistry.commit_changes("player_123")
 ```
 
-### `revert_changes(key, changes?)`
+### `revert_changes(key: any, changes: TableChanges?) -> ()`
 
 Reverts uncommitted changes.
 
 ```lua
-local data = ReplicatedRegistry.server.view("player_123")
+local data = ReplicatedRegistry.server.await_view("player_123")
 data.coins = 999 -- Oops, mistake
 
 ReplicatedRegistry.revert_changes("player_123")
