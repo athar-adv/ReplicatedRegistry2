@@ -367,6 +367,42 @@ local function create_registree_proxy(register_key: any, tbl: Table, key_changed
 	return proxy :: any, changes, key_changed_listeners
 end
 
+local function create_server_proxy(register_key: any, tbl: Table)
+	local proxy: RegistreeInterface_Server, changes, key_changed_listeners = create_registree_proxy(register_key, tbl, Signal.fire)
+	function proxy.replicate(plrs, r)
+		if not plrs or #plrs == 0 then
+			ReplicatedRegistry.server.to_clients(register_key, Players:GetPlayers(), r, changes)
+		else
+			ReplicatedRegistry.server.to_clients(register_key, plrs, r, changes)
+		end
+	end
+
+	return proxy
+end
+
+local function create_client_proxy(register_key: any, tbl: Table)
+	local proxy: RegistreeInterface_Client, changes, key_changed_listeners = create_registree_proxy(register_key, tbl, function(l, s, o, v)
+		Signal.fire(l, o, v)
+	end)
+	function proxy.replicate(r)
+		ReplicatedRegistry.client.to_server(register_key, r, changes)
+	end
+
+	return proxy
+end
+
+local function yield_call(fn: any, ...)
+	local cor = coroutine.running()
+	task.spawn(function(...)
+		while true do
+			local view = fn(...)
+			if view then coroutine.resume(cor, view) return end
+			task.wait()
+		end
+	end, ...)
+	return coroutine.yield()
+end
+
 local function disableKey(registree: Registree<any>, register_key: any, reason: string)
 	inactiveKeys[register_key] = true
 	registree.value = deep_copy(registree.copy)
@@ -547,7 +583,10 @@ function ReplicatedRegistry.client.set_remote_callbacks(request_full: RequestFul
 	assert(IS_CLIENT, MUST_CLIENT)
 	ReplicatedRegistry.client.callbacks.request_full = request_full
 	ReplicatedRegistry.client.callbacks.default_send_changes = send_changes
-	connect_change_reciever(ReplicatedRegistry.client.callbacks.remote_event_reciever)
+	connect_change_reciever(function(...)
+		assert(ReplicatedRegistry.client.callbacks.remote_event_reciever, "remote_event_reciever not set")
+		ReplicatedRegistry.client.callbacks.remote_event_reciever(...)
+	end)
 end
 
 function ReplicatedRegistry.client.to_server(registerKey: any, _sender: Sender_Client?, _changes: TableChanges?, _auto_commit: boolean?)
@@ -590,19 +629,25 @@ function ReplicatedRegistry.client.view(register_key: any): Table?
 	return registree.value
 end
 
+function ReplicatedRegistry.client.await_view(register_key: any): Table
+	assert(IS_CLIENT, MUST_CLIENT)
+
+	return yield_call(ReplicatedRegistry.client.view, register_key)
+end
+
 function ReplicatedRegistry.client.view_as_proxy(register_key: any): RegistreeInterface_Client?
 	assert(IS_CLIENT, MUST_CLIENT)
 	local tbl = ReplicatedRegistry.client.view(register_key)
 	if not tbl then return nil end
-	
-	local proxy: RegistreeInterface_Client, changes, key_changed_listeners = create_registree_proxy(register_key, tbl, function(l, s, o, v)
-		Signal.fire(l, o, v)
-	end)
-	function proxy.replicate(r)
-		ReplicatedRegistry.client.to_server(register_key, r, changes)
-	end
-	
-	return proxy
+
+	return create_client_proxy(register_key, tbl)
+end
+
+function ReplicatedRegistry.client.await_view_as_proxy(register_key: any): RegistreeInterface_Client
+	assert(IS_CLIENT, MUST_CLIENT)
+	local tbl = ReplicatedRegistry.client.await_view(register_key)
+
+	return create_client_proxy(register_key, tbl)
 end
 
 function ReplicatedRegistry.client.callbacks.remote_event_reciever(register_key: any, changes: TableChanges)
@@ -644,29 +689,45 @@ end
 function ReplicatedRegistry.server.set_remote_callbacks(request_full_init: RequestFullInit, send_changes: Sender_Server, connect_change_reciever: (reciever: (plr: Player, register_key: any, changes: TableChanges) -> ()) -> () )
 	assert(not IS_CLIENT, MUST_SERVER)
 	ReplicatedRegistry.server.callbacks.default_send_changes = send_changes
-	request_full_init(ReplicatedRegistry.server.callbacks.request_full_handler)
-	connect_change_reciever(ReplicatedRegistry.server.callbacks.remote_event_reciever)
+	request_full_init(function(...)
+		assert(ReplicatedRegistry.server.callbacks.request_full_handler, "request_full_handler not set")
+		return ReplicatedRegistry.server.callbacks.request_full_handler(...)
+	end)
+	connect_change_reciever(function(...)
+		assert(ReplicatedRegistry.server.callbacks.remote_event_reciever, "remote_event_reciever not set")
+		ReplicatedRegistry.server.callbacks.remote_event_reciever(...)
+	end)
 end
 
-function ReplicatedRegistry.server.view(register_key: any): Table
+function ReplicatedRegistry.server.view(register_key: any): Table?
 	assert(not IS_CLIENT, MUST_SERVER)
-	return assert(registrees[register_key], `Registree '{register_key}' does not exist.`).value
+	local registree = registrees[register_key]
+	if registree then
+		return registree.value
+	else
+		return nil
+	end
 end
 
-function ReplicatedRegistry.server.view_as_proxy(register_key: any): RegistreeInterface_Server
+function ReplicatedRegistry.server.await_view(register_key: any): Table
+	assert(not IS_CLIENT, MUST_SERVER)
+	
+	return yield_call(ReplicatedRegistry.server.view, register_key)
+end
+
+function ReplicatedRegistry.server.view_as_proxy(register_key: any): RegistreeInterface_Server?
 	assert(not IS_CLIENT, MUST_SERVER)
 	local tbl = ReplicatedRegistry.server.view(register_key)
-	
-	local proxy: RegistreeInterface_Server, changes, key_changed_listeners = create_registree_proxy(register_key, tbl, Signal.fire)
-	function proxy.replicate(plrs, r)
-		if not plrs or #plrs == 0 then
-			ReplicatedRegistry.server.to_clients(register_key, Players:GetPlayers(), r, changes)
-		else
-			ReplicatedRegistry.server.to_clients(register_key, plrs, r, changes)
-		end
-	end
+	if not tbl then return nil end
 
-	return proxy
+	return create_server_proxy(register_key, tbl)
+end
+
+function ReplicatedRegistry.server.await_view_as_proxy(register_key: any): RegistreeInterface_Server
+	assert(not IS_CLIENT, MUST_SERVER)
+	local tbl = ReplicatedRegistry.server.await_view(register_key)
+	
+	return create_server_proxy(register_key, tbl)
 end
 
 function ReplicatedRegistry.server.register<T>(register_key: any, registree_value: T & Table, filter: Filter?)
