@@ -746,7 +746,13 @@ end
 function ReplicatedRegistry.server.deregister<T>(register_key: any, _auto_replicate: boolean?)
 	assert(not IS_CLIENT, MUST_SERVER)
 	
-	local reg = registrees[registrees]
+	local reg = registrees[register_key]
+	assert(reg, `Registree '{register_key}' does not exist.`)
+	
+	if inactiveKeys[register_key] then
+		inactiveKeys[register_key] = nil
+	end
+
 	table.clear(reg.onRecievedListeners)
 	
 	if _auto_replicate == nil or _auto_replicate == true then
