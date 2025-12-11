@@ -1,5 +1,5 @@
 {
-	"name": "ReplicatedRegistry2",
+	"name": "replicated-registry",
 	"tree": {
 		"$path": "src"
 	}
