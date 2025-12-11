@@ -6,6 +6,7 @@ realm = "shared"
 license = "MIT"
 authors = ["athar_adv"]
 exclude = ["rokit.toml"]
+include = ["src", "default.project.json", "LICENSE"]
 homepage = "https://athar-adv.github.io/ReplicatedRegistry2"
 repository = "https://github.com/athar-adv/ReplicatedRegistry2"
 
