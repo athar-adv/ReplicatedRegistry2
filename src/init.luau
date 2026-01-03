@@ -9,8 +9,9 @@ local Signal do
 	local function connect<T...>(tbl: {(T...) -> ()}, item: (T...) -> (), side_effect: ((tbl: {(T...) -> ()}) -> ())?): RBXScriptConnection
 		table.insert(tbl, item)
 		return {
-			Connected = false,
+			Connected = true,
 			Disconnect = function(self)
+				self.Connected = false
 				local idx = table.find(tbl, item)
 				if idx then
 					table.remove(tbl, idx)
