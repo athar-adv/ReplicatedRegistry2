@@ -6,7 +6,7 @@ Type definitions for ReplicatedRegistry2.
 
 ### `Table`
 
-```lua
+```luau
 export type Table = {[any]: any}
 ```
 
@@ -14,7 +14,7 @@ A generic table type used for registree data.
 
 ### `TableChanges`
 
-```lua
+```luau
 export type TableChanges = {
     {v: any, p: {any}}
 }
@@ -38,7 +38,7 @@ An array of changes where:
 
 ### `Filter`
 
-```lua
+```luau
 export type Filter = (sender: Player?, register_key: any, tbl: Table, changes: TableChanges) -> boolean
 ```
 
@@ -54,7 +54,7 @@ A function that validates changes.
 
 ### `FilterList`
 
-```lua
+```luau
 type FilterList = {
     player_blacklist: {number}?,
     player_whitelist: {number}?,
@@ -80,28 +80,54 @@ export type RegistreeInterface<T=Table, ReplicateArgs...=()> = {
 }
 ```
 
-The proxy interface returned by `view_as_proxy()`.
+The proxy interface returned by the methods of `view().as_proxy()`.
 
 **Methods:**
-- `set(...path)(value)`: Set a value at path
-- `get(...path)`: Get a value at path
-- `incr(...path)(amount)`: Increment a number at path
-- `replicate(args...)`: Replicate changes
-- `full()`: Get the full table
+- `set(path: {any}, value: any) -> ()`: Set a value at path
+- `get(path: {any}) -> any`: Get a value at path
+- `incr(path: {any}, delta: number) -> ()`: Increment a number at path
+- `replicate(args...) -> ()`: Replicate changes
+- `data() -> Table`: Get the full table
 
-**Server ReplicateArgs:** `{Player}?, RemoteEvent?`
-**Client ReplicateArgs:** `RemoteEvent?`
+**Server `replicate()` args:** `{Player}?, RemoteEvent?`
+**Client `replicate()` args:** `RemoteEvent?`
+
+## View
+
+```luau
+export type View<T = Table, ProxyType = any> = {
+	await: () -> T,
+	unwrap: () -> T?,
+	expect: () -> T,
+	as_proxy: () -> {
+		await: () -> ProxyType,
+		unwrap: () -> ProxyType?,
+		expect: () -> ProxyType
+	}
+}
+```
+
+An interface for viewing non-gauranteed registree data.
+
+**Methods:**
+
+- `expect() -> RegistreeInterface`: Errors if the viewed value does not exist, else returns it
+- `unwrap() -> RegistreeInterface?`: Returns the viewed value, regardless if it exists or not
+- `await() -> RegistreeInterface`: If the viewed value does not exist, then it will yield the calling thread until it does, and return it.
+- `as_proxy() -> ProxyView`: Returns a sub-view for viewing the registree data as proxies.
 
 ## Internal Types
 
 ### `Registree`
 
-```lua
+```luau
 type Registree<T=Table> = {
     value: T,
     copy: Table,
     filter: Filter?,
-    onRecievedListeners: {(plr: Player?, tbl: Table, changes: TableChanges) -> ()},
+    onRecievedListeners: {(...any) -> ()},
+    onUpdatedListeners: {(...any) -> ()},
+    onKeyChangedListeners: {[string]: {(...any) -> ()}}
 }
 ```
 

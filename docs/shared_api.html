@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Server API - ReplicatedRegistry2 Docs</title>
+        <title>Shared API - ReplicatedRegistry2 Docs</title>
 
 
         <!-- Custom HTML head -->
@@ -178,84 +178,38 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="server-api"><a class="header" href="#server-api">Server API</a></h1>
-<h2 id="registering-tables"><a class="header" href="#registering-tables">Registering Tables</a></h2>
-<h3 id="serverregisterkey-any-table-table-filter-replicationfilter"><a class="header" href="#serverregisterkey-any-table-table-filter-replicationfilter"><code>server.register(key: any, table: Table, filter: ReplicationFilter?)</code></a></h3>
-<p>Registers a table on the server for replication.</p>
-<pre><code class="language-luau">local playerData = {
-    coins = 100,
-    level = 1,
-    inventory = {}
-}
-
-server.register("player_123", playerData)
+                        <h1 id="shared-api"><a class="header" href="#shared-api">Shared API</a></h1>
+<h2 id="change-management"><a class="header" href="#change-management">Change Management</a></h2>
+<h3 id="get_changeskey-any---"><a class="header" href="#get_changeskey-any---"><code>get_changes(key: any) -&gt; ()</code></a></h3>
+<p>Gets all pending changes since last commit.</p>
+<pre><code class="language-lua">local changes = ReplicatedRegistry.get_changes("player_123")
+-- changes = {{v = 150, p = {"coins"}}, {v = 2, p = {"level"}}}
 </code></pre>
-<p><strong>With filter:</strong></p>
-<pre><code class="language-luau">local filter = ReplicatedRegistry.get_filter({
-    rate_limit = 10, -- 10 changes per second max
-    player_whitelist = {123, 456} -- Only these user IDs
-})
-
-server.register("shared_data", sharedTable, filter)
+<h3 id="commit_changeskey-any-changes-tablechanges---"><a class="header" href="#commit_changeskey-any-changes-tablechanges---"><code>commit_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
+<p>Commits changes, updating the internal copy.</p>
+<pre><code class="language-lua">ReplicatedRegistry.commit_changes("player_123")
 </code></pre>
-<h2 id="accessing-tables"><a class="header" href="#accessing-tables">Accessing Tables</a></h2>
-<h3 id="serverviewkey-any---table"><a class="header" href="#serverviewkey-any---table"><code>server.view(key: any) -&gt; Table?</code></a></h3>
-<p>Returns a viewing interface for registree data.</p>
-<pre><code class="language-lua">local data = server.view("player_123")
-    .unwrap()
-assert(data, "data not registered!")
-data.coins = 150
-data.level = 2
+<h3 id="revert_changeskey-any-changes-tablechanges---"><a class="header" href="#revert_changeskey-any-changes-tablechanges---"><code>revert_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
+<p>Reverts uncommitted changes.</p>
+<pre><code class="language-lua">local data = ReplicatedRegistry.server.await_view("player_123")
+data.coins = 999 -- Oops, mistake
+
+ReplicatedRegistry.revert_changes("player_123")
+-- coins reverted to previous committed value
 </code></pre>
-<pre><code class="language-luau">local proxy = server.view("player_123")
-    .as_proxy()
-    .await()
-
--- Set values
-proxy.set({"coins"}, 200)
-proxy.set({"inventory", "sword"}, true)
-
--- Get values
-local coins = proxy.get({"coins"})
-
--- Increment values
-proxy.incr({"coins"}, 50)
-proxy.incr({"level"}, 1)
-
--- Replicate to specific players
-proxy.replicate({player1, player2})
-
--- Replicate to all players
-proxy.replicate()
-
--- Get full table
-local fullTable = proxy.full()
-</code></pre>
-<h2 id="replication"><a class="header" href="#replication">Replication</a></h2>
-<h3 id="serverto_clientskey-any-players-player-sender-sender_server-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#serverto_clientskey-any-players-player-sender-sender_server-changes-tablechanges-auto_commit-boolean---"><code>server.to_clients(key: any, players: {Player}, sender: Sender_Server?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
-<p>Sends changes to specified clients.</p>
-<pre><code class="language-lua">-- Replicate to specific players
-ReplicatedRegistry.server.to_clients(
-    "player_123",
-    {player1, player2}
-)
-
--- Replicate to all players
-ReplicatedRegistry.server.to_clients(
-    "global_data",
-    game.Players:GetPlayers()
-)
-</code></pre>
+<h2 id="util"><a class="header" href="#util">Util</a></h2>
+<h3 id="get_registered_keys---any"><a class="header" href="#get_registered_keys---any"><code>get_registered_keys() -&gt; {any}</code></a></h3>
+<p>Returns an array of currently registered register keys. Useful for mass replication of keys</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="shared_api.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="setup.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="client_api.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="server_api.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -265,11 +219,11 @@ ReplicatedRegistry.server.to_clients(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="shared_api.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="setup.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="client_api.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="server_api.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

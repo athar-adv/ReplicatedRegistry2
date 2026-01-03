@@ -8,6 +8,7 @@
 
 # API Reference
 
+- [Shared API](./shared_api.md)
 - [Server API](./server_api.md)
 - [Client API](./client_api.md)
 - [Filters](./filters.md)

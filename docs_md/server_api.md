@@ -6,50 +6,45 @@
 
 Registers a table on the server for replication.
 
-```lua
+```luau
 local playerData = {
     coins = 100,
     level = 1,
     inventory = {}
 }
 
-ReplicatedRegistry.server.register("player_123", playerData)
+server.register("player_123", playerData)
 ```
 
 **With filter:**
 
-```lua
+```luau
 local filter = ReplicatedRegistry.get_filter({
     rate_limit = 10, -- 10 changes per second max
     player_whitelist = {123, 456} -- Only these user IDs
 })
 
-ReplicatedRegistry.server.register("shared_data", sharedTable, filter)
+server.register("shared_data", sharedTable, filter)
 ```
 
 ## Accessing Tables
 
 ### `server.view(key: any) -> Table?`
 
-Returns the registered table directly.
+Returns a viewing interface for registree data.
 
 ```lua
-local data = ReplicatedRegistry.server.view("player_123")
+local data = server.view("player_123")
+    .unwrap()
 assert(data, "data not registered!")
 data.coins = 150
 data.level = 2
 ```
 
-### `server.await_view(key: any) -> Table`
-
-Yields the calling thread indefinitely until a Registree registered with `key` is created.
-
-### `server.view_as_proxy(key: any) -> RegistreeInterface_Server?`
-
-Returns a proxy interface with helper methods.
-
-```lua
-local proxy = ReplicatedRegistry.server.view_as_proxy("player_123")
+```luau
+local proxy = server.view("player_123")
+    .as_proxy()
+    .await()
 
 -- Set values
 proxy.set({"coins"}, 200)
@@ -72,13 +67,9 @@ proxy.replicate()
 local fullTable = proxy.full()
 ```
 
-### `server.await_view_as_proxy(key: any) -> RegistreeInterface_Server`
-
-The same as `server.view_as_proxy` but yields the calling thread indefinitely until a registree with the key `key` exists.
-
 ## Replication
 
-### `server.to_clients(key: any, players: {Player}, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -> ()`
+### `server.to_clients(key: any, players: {Player}, sender: Sender_Server?, changes: TableChanges?, auto_commit: boolean?) -> ()`
 
 Sends changes to specified clients.
 
@@ -94,35 +85,4 @@ ReplicatedRegistry.server.to_clients(
     "global_data",
     game.Players:GetPlayers()
 )
-```
-
-## Change Management
-
-### `get_changes(key: any) -> ()`
-
-Gets all pending changes since last commit.
-
-```lua
-local changes = ReplicatedRegistry.get_changes("player_123")
--- changes = {{v = 150, p = {"coins"}}, {v = 2, p = {"level"}}}
-```
-
-### `commit_changes(key: any, changes: TableChanges?) -> ()`
-
-Commits changes, updating the internal copy.
-
-```lua
-ReplicatedRegistry.commit_changes("player_123")
-```
-
-### `revert_changes(key: any, changes: TableChanges?) -> ()`
-
-Reverts uncommitted changes.
-
-```lua
-local data = ReplicatedRegistry.server.await_view("player_123")
-data.coins = 999 -- Oops, mistake
-
-ReplicatedRegistry.revert_changes("player_123")
--- coins reverted to previous committed value
 ```

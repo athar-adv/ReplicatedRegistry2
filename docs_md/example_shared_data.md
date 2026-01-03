@@ -6,11 +6,12 @@ Examples of using ReplicatedRegistry2 for shared game state like leaderboards an
 
 ### Server
 
-```lua
+```luau
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local server = ReplicatedRegistry.server
 
 -- Setup remotes
-ReplicatedRegistry.server.set_remote_instances(
+server.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -21,13 +22,14 @@ local leaderboard = {
     lastUpdate = os.time()
 }
 
--- No filter = read-only for clients
-ReplicatedRegistry.server.register("global_leaderboard", leaderboard)
+server.register("global_leaderboard", leaderboard, 
+    ReplicatedRegistry.get_filter {no_recieve = true})
 
 -- Update leaderboard
 function updateLeaderboard()
-    local proxy = ReplicatedRegistry.server.view_as_proxy("global_leaderboard")
-    
+    local proxy = server.view("global_leaderboard")
+        .as_proxy()
+        .expect()
     -- Sort players by score
     local players = {}
     for _, player in Players:GetPlayers() do
@@ -52,7 +54,7 @@ function updateLeaderboard()
     proxy.set({"lastUpdate"}, os.time())
     
     -- Broadcast to all players
-    proxy.replicate()
+    proxy.replicate(game.Players:GetPlayers())
 end
 
 -- Update every 30 seconds
@@ -66,19 +68,21 @@ end)
 
 ### Client
 
-```lua
+```luau
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local client = ReplicatedRegistry.client
 
-ReplicatedRegistry.client.set_remote_instances(
+client.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
 
 -- Get leaderboard
-local leaderboard = ReplicatedRegistry.client.view("global_leaderboard")
+local leaderboard = client.view("global_leaderboard")
+    .await()
 
 -- Listen for updates
-ReplicatedRegistry.on_recieve("global_leaderboard", function(sender, tbl, changes)
+client.on_update("global_leaderboard", function(tbl)
     print("Leaderboard updated!")
     updateLeaderboardUI(tbl.topPlayers)
 end)
@@ -91,11 +95,12 @@ updateLeaderboardUI(leaderboard.topPlayers)
 
 ### Server
 
-```lua
+```luau
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local server = ReplicatedRegistry.server
 
 -- Setup remotes
-ReplicatedRegistry.server.set_remote_instances(
+server.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -115,17 +120,17 @@ local adminFilter = ReplicatedRegistry.get_filter({
     rate_limit = 5
 })
 
-ReplicatedRegistry.server.register("game_settings", gameSettings, adminFilter)
+server.register("game_settings", gameSettings, adminFilter)
 
 -- Listen for admin changes
-ReplicatedRegistry.on_recieve("game_settings", function(sender, tbl, changes)
+server.on_receive("game_settings", function(sender, tbl, changes)
     print(`Admin {sender.Name} changed settings:`)
     for _, change in changes do
         print(`  {table.concat(change.p, ".")} = {change.v}`)
     end
     
     -- Broadcast to all players
-    ReplicatedRegistry.server.to_clients(
+    server.to_clients(
         "game_settings",
         Players:GetPlayers()
     )
@@ -133,32 +138,35 @@ end)
 
 -- Helper function to update settings
 function updateGameSettings(newSettings)
-    local proxy = ReplicatedRegistry.server.view_as_proxy("game_settings")
-    
+    local proxy = server.view("game_settings")
+        .as_proxy()
+        .expect()
     for key, value in newSettings do
         proxy.set({key}, value)
     end
     
     -- Broadcast to everyone
-    proxy.replicate()
+    proxy.replicate(Players:GetPlayers())
 end
 ```
 
 ### Client
 
-```lua
+```luau
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local client = ReplicatedRegistry.client
 
-ReplicatedRegistry.client.set_remote_instances(
+client.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
 
 -- Get settings
-local settings = ReplicatedRegistry.client.view("game_settings")
+local settings = client.view("game_settings")
+    .await()
 
 -- Listen for changes
-ReplicatedRegistry.on_recieve("game_settings", function(sender, tbl, changes)
+client.on_receive("game_settings", function(tbl, changes)
     print("Game settings updated:")
     for _, change in changes do
         local setting = change.p[1]
@@ -183,7 +191,9 @@ end
 if isAdmin(Players.LocalPlayer) then
     -- Admin can change settings
     function changeRoundTime(newTime)
-        local proxy = ReplicatedRegistry.client.view_as_proxy("game_settings")
+        local proxy = client.view("game_settings")
+            .as_proxy()
+            .expect()
         proxy.set({"roundTime"}, newTime)
         proxy.replicate()
     end
@@ -194,7 +204,7 @@ end
 
 ### Server
 
-```lua
+```luau
 local teams = {
     red = {
         score = 0,
@@ -213,33 +223,37 @@ local filter = ReplicatedRegistry.get_filter({
     no_recieve = true -- No client updates
 })
 
-ReplicatedRegistry.server.register("team_data", teams, filter)
+server.register("team_data", teams, filter)
 
 -- Update team scores
 function addTeamScore(teamName, points)
-    local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
+    local proxy = server.view("team_data")
+        .as_proxy()
+        .expect()
     
     proxy.incr({teamName, "score"}, points)
-    proxy.replicate() -- Broadcast to all
+    proxy.replicate(Players:GetPlayers()) -- Broadcast to all
 end
 
 -- Update player counts
 Players.PlayerAdded:Connect(function(player)
     local team = getPlayerTeam(player)
-    local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
+    local proxy = server.view("team_data")
+        .as_proxy()
+        .expect()
     
     proxy.incr({team, "players"}, 1)
-    proxy.replicate()
+    proxy.replicate(Players:GetPlayers())
 end)
 ```
 
 ### Client
 
 ```lua
-local teams = ReplicatedRegistry.client.view("team_data")
+local teams = client.view("team_data")
 
 -- Update UI when teams change
-ReplicatedRegistry.on_recieve("team_data", function(sender, tbl, changes)
+client.on_update("team_data", function(tbl)
     updateTeamScoreUI(tbl.red.score, tbl.blue.score)
     updateTeamCountUI(tbl.red.players, tbl.blue.players)
 end)

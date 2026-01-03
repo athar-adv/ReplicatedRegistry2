@@ -269,39 +269,60 @@ ReplicatedRegistry.client.set_remote_callbacks(
     end
 )
 </code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="shared-api"><a class="header" href="#shared-api">Shared API</a></h1>
+<h2 id="change-management"><a class="header" href="#change-management">Change Management</a></h2>
+<h3 id="get_changeskey-any---"><a class="header" href="#get_changeskey-any---"><code>get_changes(key: any) -&gt; ()</code></a></h3>
+<p>Gets all pending changes since last commit.</p>
+<pre><code class="language-lua">local changes = ReplicatedRegistry.get_changes("player_123")
+-- changes = {{v = 150, p = {"coins"}}, {v = 2, p = {"level"}}}
+</code></pre>
+<h3 id="commit_changeskey-any-changes-tablechanges---"><a class="header" href="#commit_changeskey-any-changes-tablechanges---"><code>commit_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
+<p>Commits changes, updating the internal copy.</p>
+<pre><code class="language-lua">ReplicatedRegistry.commit_changes("player_123")
+</code></pre>
+<h3 id="revert_changeskey-any-changes-tablechanges---"><a class="header" href="#revert_changeskey-any-changes-tablechanges---"><code>revert_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
+<p>Reverts uncommitted changes.</p>
+<pre><code class="language-lua">local data = ReplicatedRegistry.server.await_view("player_123")
+data.coins = 999 -- Oops, mistake
+
+ReplicatedRegistry.revert_changes("player_123")
+-- coins reverted to previous committed value
+</code></pre>
+<h2 id="util"><a class="header" href="#util">Util</a></h2>
+<h3 id="get_registered_keys---any"><a class="header" href="#get_registered_keys---any"><code>get_registered_keys() -&gt; {any}</code></a></h3>
+<p>Returns an array of currently registered register keys. Useful for mass replication of keys</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="server-api"><a class="header" href="#server-api">Server API</a></h1>
 <h2 id="registering-tables"><a class="header" href="#registering-tables">Registering Tables</a></h2>
 <h3 id="serverregisterkey-any-table-table-filter-replicationfilter"><a class="header" href="#serverregisterkey-any-table-table-filter-replicationfilter"><code>server.register(key: any, table: Table, filter: ReplicationFilter?)</code></a></h3>
 <p>Registers a table on the server for replication.</p>
-<pre><code class="language-lua">local playerData = {
+<pre><code class="language-luau">local playerData = {
     coins = 100,
     level = 1,
     inventory = {}
 }
 
-ReplicatedRegistry.server.register("player_123", playerData)
+server.register("player_123", playerData)
 </code></pre>
 <p><strong>With filter:</strong></p>
-<pre><code class="language-lua">local filter = ReplicatedRegistry.get_filter({
+<pre><code class="language-luau">local filter = ReplicatedRegistry.get_filter({
     rate_limit = 10, -- 10 changes per second max
     player_whitelist = {123, 456} -- Only these user IDs
 })
 
-ReplicatedRegistry.server.register("shared_data", sharedTable, filter)
+server.register("shared_data", sharedTable, filter)
 </code></pre>
 <h2 id="accessing-tables"><a class="header" href="#accessing-tables">Accessing Tables</a></h2>
 <h3 id="serverviewkey-any---table"><a class="header" href="#serverviewkey-any---table"><code>server.view(key: any) -&gt; Table?</code></a></h3>
-<p>Returns the registered table directly.</p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.server.view("player_123")
+<p>Returns a viewing interface for registree data.</p>
+<pre><code class="language-lua">local data = server.view("player_123")
+    .unwrap()
 assert(data, "data not registered!")
 data.coins = 150
 data.level = 2
 </code></pre>
-<h3 id="serverawait_viewkey-any---table"><a class="header" href="#serverawait_viewkey-any---table"><code>server.await_view(key: any) -&gt; Table</code></a></h3>
-<p>Yields the calling thread indefinitely until a Registree registered with <code>key</code> is created.</p>
-<h3 id="serverview_as_proxykey-any---registreeinterface_server"><a class="header" href="#serverview_as_proxykey-any---registreeinterface_server"><code>server.view_as_proxy(key: any) -&gt; RegistreeInterface_Server?</code></a></h3>
-<p>Returns a proxy interface with helper methods.</p>
-<pre><code class="language-lua">local proxy = ReplicatedRegistry.server.view_as_proxy("player_123")
+<pre><code class="language-luau">local proxy = server.view("player_123")
+    .as_proxy()
+    .await()
 
 -- Set values
 proxy.set({"coins"}, 200)
@@ -323,10 +344,8 @@ proxy.replicate()
 -- Get full table
 local fullTable = proxy.full()
 </code></pre>
-<h3 id="serverawait_view_as_proxykey-any---registreeinterface_server"><a class="header" href="#serverawait_view_as_proxykey-any---registreeinterface_server"><code>server.await_view_as_proxy(key: any) -&gt; RegistreeInterface_Server</code></a></h3>
-<p>The same as <code>server.view_as_proxy</code> but yields the calling thread indefinitely until a registree with the key <code>key</code> exists.</p>
 <h2 id="replication"><a class="header" href="#replication">Replication</a></h2>
-<h3 id="serverto_clientskey-any-players-player-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#serverto_clientskey-any-players-player-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><code>server.to_clients(key: any, players: {Player}, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
+<h3 id="serverto_clientskey-any-players-player-sender-sender_server-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#serverto_clientskey-any-players-player-sender-sender_server-changes-tablechanges-auto_commit-boolean---"><code>server.to_clients(key: any, players: {Player}, sender: Sender_Server?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
 <p>Sends changes to specified clients.</p>
 <pre><code class="language-lua">-- Replicate to specific players
 ReplicatedRegistry.server.to_clients(
@@ -340,43 +359,25 @@ ReplicatedRegistry.server.to_clients(
     game.Players:GetPlayers()
 )
 </code></pre>
-<h2 id="change-management"><a class="header" href="#change-management">Change Management</a></h2>
-<h3 id="get_changeskey-any---"><a class="header" href="#get_changeskey-any---"><code>get_changes(key: any) -&gt; ()</code></a></h3>
-<p>Gets all pending changes since last commit.</p>
-<pre><code class="language-lua">local changes = ReplicatedRegistry.get_changes("player_123")
--- changes = {{v = 150, p = {"coins"}}, {v = 2, p = {"level"}}}
-</code></pre>
-<h3 id="commit_changeskey-any-changes-tablechanges---"><a class="header" href="#commit_changeskey-any-changes-tablechanges---"><code>commit_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
-<p>Commits changes, updating the internal copy.</p>
-<pre><code class="language-lua">ReplicatedRegistry.commit_changes("player_123")
-</code></pre>
-<h3 id="revert_changeskey-any-changes-tablechanges---"><a class="header" href="#revert_changeskey-any-changes-tablechanges---"><code>revert_changes(key: any, changes: TableChanges?) -&gt; ()</code></a></h3>
-<p>Reverts uncommitted changes.</p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.server.await_view("player_123")
-data.coins = 999 -- Oops, mistake
-
-ReplicatedRegistry.revert_changes("player_123")
--- coins reverted to previous committed value
-</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="client-api"><a class="header" href="#client-api">Client API</a></h1>
 <h2 id="accessing-tables-1"><a class="header" href="#accessing-tables-1">Accessing Tables</a></h2>
-<h3 id="clientviewkey-any---table"><a class="header" href="#clientviewkey-any---table"><code>client.view(key: any) -&gt; Table?</code></a></h3>
-<p>Requests and returns the registered table from the server, and nil if not registered yet.</p>
-<pre><code class="language-lua">local playerData = ReplicatedRegistry.client.view("player_123")
+<h3 id="clientviewkey-any---view"><a class="header" href="#clientviewkey-any---view"><code>client.view(key: any) -&gt; View</code></a></h3>
+<p>Returns a viewing interface for registree data on the server.</p>
+<pre><code class="language-luau">local playerData = ReplicatedRegistry.client.view("player_123")
+    .unwrap()
 assert(playerData, "playerData not registered yet!")
 print(playerData.coins) -- 100
 
 -- Modify locally
 playerData.coins = 150
 </code></pre>
-<h3 id="clientawait_viewkey-any---table"><a class="header" href="#clientawait_viewkey-any---table"><code>client.await_view(key: any) -&gt; Table</code></a></h3>
-<p>Yields the calling thread indefinitely until a Registree registered with <code>key</code> is created on the server.</p>
-<pre><code class="language-lua">local playerData = ReplicatedRegistry.client.await_view("player_123")
+<pre><code class="language-luau">local playerData = ReplicatedRegistry.client.view("player_123")
+    .await()
 print(playerData.coins) -- 100
 </code></pre>
-<h3 id="clientview_as_proxykey-any---registreeinterface_client"><a class="header" href="#clientview_as_proxykey-any---registreeinterface_client"><code>client.view_as_proxy(key: any) -&gt; RegistreeInterface_Client?</code></a></h3>
-<p>Returns a proxy interface with helper methods.</p>
-<pre><code class="language-lua">local proxy = ReplicatedRegistry.client.view_as_proxy("player_123")
+<pre><code class="language-luau">local proxy = ReplicatedRegistry.client.view("player_123")
+    .as_proxy()
+    .await()
 assert(proxy, "proxy not registered yet!")
 
 -- Set values
@@ -393,14 +394,13 @@ proxy.incr({"coins"}, 50)
 proxy.replicate()
 
 -- Get full table
-local fullTable = proxy.full()
+local fullTable = proxy.data()
 </code></pre>
-<h3 id="clientawait_view_as_proxykey-any---registreeinterface_client"><a class="header" href="#clientawait_view_as_proxykey-any---registreeinterface_client"><code>client.await_view_as_proxy(key: any) -&gt; RegistreeInterface_Client</code></a></h3>
-<p>The same as <code>client.view_as_proxy</code> but yields the calling thread indefinitely until a registree with the key <code>key</code> exists.</p>
 <h2 id="replication-1"><a class="header" href="#replication-1">Replication</a></h2>
-<h3 id="clientto_serverkey-any-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#clientto_serverkey-any-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><code>client.to_server(key: any, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
+<h3 id="clientto_serverkey-any-sender-sender_client-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#clientto_serverkey-any-sender-sender_client-changes-tablechanges-auto_commit-boolean---"><code>client.to_server(key: any, sender: Sender_Client?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
 <p>Sends changes to the server.</p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.client.view("player_123")
+<pre><code class="language-luau">local data = ReplicatedRegistry.client.view("player_123")
+    .await()
 data.coins = 200
 data.level = 5
 
@@ -408,17 +408,17 @@ data.level = 5
 ReplicatedRegistry.client.to_server("player_123")
 </code></pre>
 <p><strong>Manual change tracking:</strong></p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.client.view("player_123")
+<pre><code class="language-luau">local data = ReplicatedRegistry.client.view("player_123")
+    .await()
 data.coins = 200
 
 local changes = ReplicatedRegistry.get_changes("player_123")
 ReplicatedRegistry.client.to_server("player_123", nil, changes)
 </code></pre>
 <h2 id="listening-for-changes"><a class="header" href="#listening-for-changes">Listening for Changes</a></h2>
-<h3 id="on_receivekey-any-callback-sender-player-old_table-table-changes-tablechanges------scriptconnection"><a class="header" href="#on_receivekey-any-callback-sender-player-old_table-table-changes-tablechanges------scriptconnection"><code>on_receive(key: any, callback: (sender: Player?, old_table: Table, changes: TableChanges) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
+<h3 id="on_receivekey-any-callback-old_table-table-changes-tablechanges------scriptconnection"><a class="header" href="#on_receivekey-any-callback-old_table-table-changes-tablechanges------scriptconnection"><code>on_receive(key: any, callback: (old_table: Table, changes: TableChanges) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
 <p>Listens for incoming changes from the server.</p>
-<pre><code class="language-lua">local connection = ReplicatedRegistry.on_recieve("player_123", function(sender, table, changes)
-    print("Received changes from", sender)
+<pre><code class="language-luau">local connection = ReplicatedRegistry.client.on_receive("player_123", function(table, changes)
     for _, change in changes do
         print("Path:", table.concat(change.p, "."))
         print("Value:", change.v)
@@ -428,13 +428,15 @@ end)
 -- Disconnect when done
 connection:Disconnect()
 </code></pre>
-<h2 id="change-management-1"><a class="header" href="#change-management-1">Change Management</a></h2>
-<p>Same as server API:</p>
-<ul>
-<li><code>get_changes(key)</code> - Get pending changes</li>
-<li><code>commit_changes(key)</code> - Commit changes</li>
-<li><code>revert_changes(key)</code> - Revert changes</li>
-</ul>
+<h3 id="on_key_changedkey-any-path-any-callback-old_value-any-new_value-any------scriptconnection"><a class="header" href="#on_key_changedkey-any-path-any-callback-old_value-any-new_value-any------scriptconnection"><code>on_key_changed(key: any, path: {any}, callback: (old_value: any, new_value: any) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
+<p>Listens for incoming changes to a specific path from the server.</p>
+<pre><code class="language-luau">local connection = ReplicatedRegistry.client.on_key_changed("player_123", {"coins"}, function(old_value, new_value)
+    print(`{old_value} -&gt; {new_value}`)
+end)
+
+-- Disconnect when done
+connection:Disconnect()
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="filters"><a class="header" href="#filters">Filters</a></h1>
 <p>Filters are a on-recieved per register key validation system everytime your context recieves TableChanges from the opposite context.</p>
 <h2 id="built-in-filters"><a class="header" href="#built-in-filters">Built-in Filters</a></h2>
@@ -607,11 +609,11 @@ ReplicatedRegistry.callbacks.on_changes_recieved =
 <p>Type definitions for ReplicatedRegistry2.</p>
 <h2 id="core-types"><a class="header" href="#core-types">Core Types</a></h2>
 <h3 id="table"><a class="header" href="#table"><code>Table</code></a></h3>
-<pre><code class="language-lua">export type Table = {[any]: any}
+<pre><code class="language-luau">export type Table = {[any]: any}
 </code></pre>
 <p>A generic table type used for registree data.</p>
 <h3 id="tablechanges"><a class="header" href="#tablechanges"><code>TableChanges</code></a></h3>
-<pre><code class="language-lua">export type TableChanges = {
+<pre><code class="language-luau">export type TableChanges = {
     {v: any, p: {any}}
 }
 </code></pre>
@@ -629,7 +631,7 @@ ReplicatedRegistry.callbacks.on_changes_recieved =
 </code></pre>
 <h2 id="filter-types"><a class="header" href="#filter-types">Filter Types</a></h2>
 <h3 id="filter"><a class="header" href="#filter"><code>Filter</code></a></h3>
-<pre><code class="language-lua">export type Filter = (sender: Player?, register_key: any, tbl: Table, changes: TableChanges) -&gt; boolean
+<pre><code class="language-luau">export type Filter = (sender: Player?, register_key: any, tbl: Table, changes: TableChanges) -&gt; boolean
 </code></pre>
 <p>A function that validates changes.</p>
 <p><strong>Parameters:</strong></p>
@@ -641,7 +643,7 @@ ReplicatedRegistry.callbacks.on_changes_recieved =
 </ul>
 <p><strong>Returns:</strong> <code>true</code> to accept, <code>false</code> to reject</p>
 <h3 id="filterlist"><a class="header" href="#filterlist"><code>FilterList</code></a></h3>
-<pre><code class="language-lua">type FilterList = {
+<pre><code class="language-luau">type FilterList = {
     player_blacklist: {number}?,
     player_whitelist: {number}?,
     rate_limit: number?,
@@ -660,24 +662,46 @@ ReplicatedRegistry.callbacks.on_changes_recieved =
     full: () -&gt; T,
 }
 </code></pre>
-<p>The proxy interface returned by <code>view_as_proxy()</code>.</p>
+<p>The proxy interface returned by the methods of <code>view().as_proxy()</code>.</p>
 <p><strong>Methods:</strong></p>
 <ul>
-<li><code>set(...path)(value)</code>: Set a value at path</li>
-<li><code>get(...path)</code>: Get a value at path</li>
-<li><code>incr(...path)(amount)</code>: Increment a number at path</li>
-<li><code>replicate(args...)</code>: Replicate changes</li>
-<li><code>full()</code>: Get the full table</li>
+<li><code>set(path: {any}, value: any) -&gt; ()</code>: Set a value at path</li>
+<li><code>get(path: {any}) -&gt; any</code>: Get a value at path</li>
+<li><code>incr(path: {any}, delta: number) -&gt; ()</code>: Increment a number at path</li>
+<li><code>replicate(args...) -&gt; ()</code>: Replicate changes</li>
+<li><code>data() -&gt; Table</code>: Get the full table</li>
 </ul>
-<p><strong>Server ReplicateArgs:</strong> <code>{Player}?, RemoteEvent?</code>
-<strong>Client ReplicateArgs:</strong> <code>RemoteEvent?</code></p>
+<p><strong>Server <code>replicate()</code> args:</strong> <code>{Player}?, RemoteEvent?</code>
+<strong>Client <code>replicate()</code> args:</strong> <code>RemoteEvent?</code></p>
+<h2 id="view"><a class="header" href="#view">View</a></h2>
+<pre><code class="language-luau">export type View&lt;T = Table, ProxyType = any&gt; = {
+	await: () -&gt; T,
+	unwrap: () -&gt; T?,
+	expect: () -&gt; T,
+	as_proxy: () -&gt; {
+		await: () -&gt; ProxyType,
+		unwrap: () -&gt; ProxyType?,
+		expect: () -&gt; ProxyType
+	}
+}
+</code></pre>
+<p>An interface for viewing non-gauranteed registree data.</p>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>expect() -&gt; RegistreeInterface</code>: Errors if the viewed value does not exist, else returns it</li>
+<li><code>unwrap() -&gt; RegistreeInterface?</code>: Returns the viewed value, regardless if it exists or not</li>
+<li><code>await() -&gt; RegistreeInterface</code>: If the viewed value does not exist, then it will yield the calling thread until it does, and return it.</li>
+<li><code>as_proxy() -&gt; ProxyView</code>: Returns a sub-view for viewing the registree data as proxies.</li>
+</ul>
 <h2 id="internal-types"><a class="header" href="#internal-types">Internal Types</a></h2>
 <h3 id="registree"><a class="header" href="#registree"><code>Registree</code></a></h3>
-<pre><code class="language-lua">type Registree&lt;T=Table&gt; = {
+<pre><code class="language-luau">type Registree&lt;T=Table&gt; = {
     value: T,
     copy: Table,
     filter: Filter?,
-    onRecievedListeners: {(plr: Player?, tbl: Table, changes: TableChanges) -&gt; ()},
+    onRecievedListeners: {(...any) -&gt; ()},
+    onUpdatedListeners: {(...any) -&gt; ()},
+    onKeyChangedListeners: {[string]: {(...any) -&gt; ()}}
 }
 </code></pre>
 <p>Internal structure for registered tables.</p>
@@ -746,7 +770,7 @@ end
 <div style="break-before: page; page-break-before: always;"></div><h1 id="example-player-data"><a class="header" href="#example-player-data">Example: Player Data</a></h1>
 <p>A complete example of synchronizing player data between server and client.</p>
 <h2 id="server-script"><a class="header" href="#server-script">Server Script</a></h2>
-<pre><code class="language-lua">local ReplicatedStorage = game:GetService("ReplicatedStorage")
+<pre><code class="language-luau">local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
 local server = ReplicatedRegistry.server
@@ -801,7 +825,7 @@ Players.PlayerAdded:Connect(function(player)
     server.register(key, playerData, playerDataFilter)
     
     -- Listen for changes from client
-    ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
+    server.on_recieve(key, function(sender, tbl, changes)
         print(`Player {sender.Name} updated their data:`)
         for _, change in changes do
             print(`  {table.concat(change.p, ".")} = {change.v}`)
@@ -814,6 +838,7 @@ end)
 Players.PlayerRemoving:Connect(function(player)
     local key = player.UserId
     local data = server.view(key)
+        .expect()
     
     -- Save before player leaves
     savePlayerData(player, data)
@@ -821,7 +846,9 @@ end)
 
 -- Example: Give coins to player
 function giveCoins(player, amount)
-    local proxy = server.view_as_proxy(player.UserId)
+    local proxy = server.view(player.UserId)
+        .as_proxy()
+        .expect()
     
     proxy.incr({"coins"}, amount)
     proxy.replicate({player}) -- Send to client
@@ -830,6 +857,7 @@ end
 -- Example: Update player level
 function levelUp(player)
     local data = server.view(player.UserId)
+        .expect()
     
     data.level += 1
     data.coins += data.level * 10 -- Bonus coins
@@ -838,7 +866,7 @@ function levelUp(player)
 end
 </code></pre>
 <h2 id="client-script"><a class="header" href="#client-script">Client Script</a></h2>
-<pre><code class="language-lua">local ReplicatedStorage = game:GetService("ReplicatedStorage")
+<pre><code class="language-luau">local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
 local client = ReplicatedRegistry.client
@@ -854,9 +882,10 @@ local key = player.UserId
 
 -- Access player data
 local playerData = client.view(key)
+    .await()
 
 -- Listen for updates from server
-ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
+client.on_recieve(key, function(tbl, changes)
     print("Received update from server:")
     for _, change in changes do
         print(`  {table.concat(change.p, ".")} = {change.v}`)
@@ -869,7 +898,9 @@ end)
 
 -- Example: Update settings
 function updateSettings(soundEnabled, musicEnabled)
-    local proxy = client.view_as_proxy(key)
+    local proxy = client.view(key)
+        .as_proxy()
+        .expect()
     
     proxy.set({"settings", "sound"}, soundEnabled)
     proxy.set({"settings", "music"}, musicEnabled)
@@ -880,6 +911,7 @@ end
 -- Example: Purchase item
 function purchaseItem(itemName, cost)
     local data = client.view(key)
+        .expect()
     
     if data.coins &gt;= cost then
         data.coins -= cost
@@ -904,7 +936,7 @@ local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
 local server = ReplicatedRegistry.server
 
 -- Setup remotes
-ReplicatedRegistry.server.set_remote_instances(
+server.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -964,7 +996,7 @@ Players.PlayerAdded:Connect(function(player)
     server.register(key, profile.Data, profileFilter)
     
     -- Listen for changes from client
-    ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
+    server.on_receive(key, function(sender, tbl, changes)
         print(`{sender.Name} updated profile:`)
         for _, change in changes do
             print(`  {table.concat(change.p, ".")} = {change.v}`)
@@ -996,7 +1028,9 @@ function giveReward(player, coins, xp)
     local profile = Profiles[player]
     if not profile then return end
     
-    local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
+    local proxy = server.view(player.UserId)
+        .as_proxy()
+        .expect()
     
     proxy.incr({"coins"}, coins)
     proxy.incr({"level"}, xp)
@@ -1010,10 +1044,11 @@ function giveItem(player, itemName)
     local profile = Profiles[player]
     if not profile then return end
     
-    local data = ReplicatedRegistry.server.view(player.UserId)
+    local data = server.view(player.UserId)
+        .expect()
     data.inventory[itemName] = true
     
-    ReplicatedRegistry.server.to_clients(player.UserId, {player})
+    server.to_clients(player.UserId, {player})
 end
 
 -- Example: Update stats
@@ -1021,18 +1056,21 @@ function recordKill(player)
     local profile = Profiles[player]
     if not profile then return end
     
-    local proxy = ReplicatedRegistry.server.view_as_proxy(player.UserId)
+    local proxy = server.view(player.UserId)
+        .as_proxy()
+        .expect()
     proxy.incr({"stats", "kills"}, 1)
     proxy.replicate({player})
 end
 </code></pre>
 <h2 id="client-script-1"><a class="header" href="#client-script-1">Client Script</a></h2>
-<pre><code class="language-lua">local ReplicatedStorage = game:GetService("ReplicatedStorage")
+<pre><code class="language-luau">local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local client = ReplicatedRegistry.client
 
 -- Setup remotes
-ReplicatedRegistry.client.set_remote_instances(
+client.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -1041,10 +1079,11 @@ local player = Players.LocalPlayer
 local key = player.UserId
 
 -- Wait for data to be ready
-local playerData = ReplicatedRegistry.client.view(key)
+local playerData = client.view(key)
+    .await()
 
 -- Listen for profile updates
-ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
+client.on_receive(key, function(tbl, changes)
     for _, change in changes do
         local path = table.concat(change.p, ".")
         print(`Profile updated: {path} = {change.v}`)
@@ -1067,7 +1106,8 @@ updateStatsUI(playerData.stats)
 
 -- Example: Purchase system
 function tryPurchase(itemName, cost)
-    local data = ReplicatedRegistry.client.view(key)
+    local data = client.view(key)
+        .expect()
     
     if data.coins &gt;= cost then
         -- Optimistic update
@@ -1094,10 +1134,11 @@ end
 <p>Examples of using ReplicatedRegistry2 for shared game state like leaderboards and settings.</p>
 <h2 id="global-leaderboard"><a class="header" href="#global-leaderboard">Global Leaderboard</a></h2>
 <h3 id="server"><a class="header" href="#server">Server</a></h3>
-<pre><code class="language-lua">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+<pre><code class="language-luau">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local server = ReplicatedRegistry.server
 
 -- Setup remotes
-ReplicatedRegistry.server.set_remote_instances(
+server.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -1108,13 +1149,14 @@ local leaderboard = {
     lastUpdate = os.time()
 }
 
--- No filter = read-only for clients
-ReplicatedRegistry.server.register("global_leaderboard", leaderboard)
+server.register("global_leaderboard", leaderboard, 
+    ReplicatedRegistry.get_filter {no_recieve = true})
 
 -- Update leaderboard
 function updateLeaderboard()
-    local proxy = ReplicatedRegistry.server.view_as_proxy("global_leaderboard")
-    
+    local proxy = server.view("global_leaderboard")
+        .as_proxy()
+        .expect()
     -- Sort players by score
     local players = {}
     for _, player in Players:GetPlayers() do
@@ -1139,7 +1181,7 @@ function updateLeaderboard()
     proxy.set({"lastUpdate"}, os.time())
     
     -- Broadcast to all players
-    proxy.replicate()
+    proxy.replicate(game.Players:GetPlayers())
 end
 
 -- Update every 30 seconds
@@ -1151,18 +1193,20 @@ task.spawn(function()
 end)
 </code></pre>
 <h3 id="client"><a class="header" href="#client">Client</a></h3>
-<pre><code class="language-lua">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+<pre><code class="language-luau">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local client = ReplicatedRegistry.client
 
-ReplicatedRegistry.client.set_remote_instances(
+client.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
 
 -- Get leaderboard
-local leaderboard = ReplicatedRegistry.client.view("global_leaderboard")
+local leaderboard = client.view("global_leaderboard")
+    .await()
 
 -- Listen for updates
-ReplicatedRegistry.on_recieve("global_leaderboard", function(sender, tbl, changes)
+client.on_update("global_leaderboard", function(tbl)
     print("Leaderboard updated!")
     updateLeaderboardUI(tbl.topPlayers)
 end)
@@ -1172,10 +1216,11 @@ updateLeaderboardUI(leaderboard.topPlayers)
 </code></pre>
 <h2 id="game-settings"><a class="header" href="#game-settings">Game Settings</a></h2>
 <h3 id="server-1"><a class="header" href="#server-1">Server</a></h3>
-<pre><code class="language-lua">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+<pre><code class="language-luau">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local server = ReplicatedRegistry.server
 
 -- Setup remotes
-ReplicatedRegistry.server.set_remote_instances(
+server.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
@@ -1195,17 +1240,17 @@ local adminFilter = ReplicatedRegistry.get_filter({
     rate_limit = 5
 })
 
-ReplicatedRegistry.server.register("game_settings", gameSettings, adminFilter)
+server.register("game_settings", gameSettings, adminFilter)
 
 -- Listen for admin changes
-ReplicatedRegistry.on_recieve("game_settings", function(sender, tbl, changes)
+server.on_receive("game_settings", function(sender, tbl, changes)
     print(`Admin {sender.Name} changed settings:`)
     for _, change in changes do
         print(`  {table.concat(change.p, ".")} = {change.v}`)
     end
     
     -- Broadcast to all players
-    ReplicatedRegistry.server.to_clients(
+    server.to_clients(
         "game_settings",
         Players:GetPlayers()
     )
@@ -1213,29 +1258,32 @@ end)
 
 -- Helper function to update settings
 function updateGameSettings(newSettings)
-    local proxy = ReplicatedRegistry.server.view_as_proxy("game_settings")
-    
+    local proxy = server.view("game_settings")
+        .as_proxy()
+        .expect()
     for key, value in newSettings do
         proxy.set({key}, value)
     end
     
     -- Broadcast to everyone
-    proxy.replicate()
+    proxy.replicate(Players:GetPlayers())
 end
 </code></pre>
 <h3 id="client-1"><a class="header" href="#client-1">Client</a></h3>
-<pre><code class="language-lua">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+<pre><code class="language-luau">local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
+local client = ReplicatedRegistry.client
 
-ReplicatedRegistry.client.set_remote_instances(
+client.set_remote_instances(
     ReplicatedStorage.RequestFullRemote,
     ReplicatedStorage.SendChangesRemote
 )
 
 -- Get settings
-local settings = ReplicatedRegistry.client.view("game_settings")
+local settings = client.view("game_settings")
+    .await()
 
 -- Listen for changes
-ReplicatedRegistry.on_recieve("game_settings", function(sender, tbl, changes)
+client.on_receive("game_settings", function(tbl, changes)
     print("Game settings updated:")
     for _, change in changes do
         local setting = change.p[1]
@@ -1260,7 +1308,9 @@ end
 if isAdmin(Players.LocalPlayer) then
     -- Admin can change settings
     function changeRoundTime(newTime)
-        local proxy = ReplicatedRegistry.client.view_as_proxy("game_settings")
+        local proxy = client.view("game_settings")
+            .as_proxy()
+            .expect()
         proxy.set({"roundTime"}, newTime)
         proxy.replicate()
     end
@@ -1268,7 +1318,7 @@ end
 </code></pre>
 <h2 id="team-data"><a class="header" href="#team-data">Team Data</a></h2>
 <h3 id="server-2"><a class="header" href="#server-2">Server</a></h3>
-<pre><code class="language-lua">local teams = {
+<pre><code class="language-luau">local teams = {
     red = {
         score = 0,
         players = 0,
@@ -1286,30 +1336,34 @@ local filter = ReplicatedRegistry.get_filter({
     no_recieve = true -- No client updates
 })
 
-ReplicatedRegistry.server.register("team_data", teams, filter)
+server.register("team_data", teams, filter)
 
 -- Update team scores
 function addTeamScore(teamName, points)
-    local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
+    local proxy = server.view("team_data")
+        .as_proxy()
+        .expect()
     
     proxy.incr({teamName, "score"}, points)
-    proxy.replicate() -- Broadcast to all
+    proxy.replicate(Players:GetPlayers()) -- Broadcast to all
 end
 
 -- Update player counts
 Players.PlayerAdded:Connect(function(player)
     local team = getPlayerTeam(player)
-    local proxy = ReplicatedRegistry.server.view_as_proxy("team_data")
+    local proxy = server.view("team_data")
+        .as_proxy()
+        .expect()
     
     proxy.incr({team, "players"}, 1)
-    proxy.replicate()
+    proxy.replicate(Players:GetPlayers())
 end)
 </code></pre>
 <h3 id="client-2"><a class="header" href="#client-2">Client</a></h3>
-<pre><code class="language-lua">local teams = ReplicatedRegistry.client.view("team_data")
+<pre><code class="language-lua">local teams = client.view("team_data")
 
 -- Update UI when teams change
-ReplicatedRegistry.on_recieve("team_data", function(sender, tbl, changes)
+client.on_update("team_data", function(tbl)
     updateTeamScoreUI(tbl.red.score, tbl.blue.score)
     updateTeamCountUI(tbl.red.players, tbl.blue.players)
 end)

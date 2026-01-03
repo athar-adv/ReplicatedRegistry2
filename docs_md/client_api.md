@@ -2,12 +2,13 @@
 
 ## Accessing Tables
 
-### `client.view(key: any) -> Table?`
+### `client.view(key: any) -> View`
 
-Requests and returns the registered table from the server, and nil if not registered yet.
+Returns a viewing interface for registree data on the server.
 
-```lua
+```luau
 local playerData = ReplicatedRegistry.client.view("player_123")
+    .unwrap()
 assert(playerData, "playerData not registered yet!")
 print(playerData.coins) -- 100
 
@@ -15,21 +16,16 @@ print(playerData.coins) -- 100
 playerData.coins = 150
 ```
 
-### `client.await_view(key: any) -> Table`
-
-Yields the calling thread indefinitely until a Registree registered with `key` is created on the server.
-
-```lua
-local playerData = ReplicatedRegistry.client.await_view("player_123")
+```luau
+local playerData = ReplicatedRegistry.client.view("player_123")
+    .await()
 print(playerData.coins) -- 100
 ```
 
-### `client.view_as_proxy(key: any) -> RegistreeInterface_Client?`
-
-Returns a proxy interface with helper methods.
-
-```lua
-local proxy = ReplicatedRegistry.client.view_as_proxy("player_123")
+```luau
+local proxy = ReplicatedRegistry.client.view("player_123")
+    .as_proxy()
+    .await()
 assert(proxy, "proxy not registered yet!")
 
 -- Set values
@@ -46,21 +42,18 @@ proxy.incr({"coins"}, 50)
 proxy.replicate()
 
 -- Get full table
-local fullTable = proxy.full()
+local fullTable = proxy.data()
 ```
-
-### `client.await_view_as_proxy(key: any) -> RegistreeInterface_Client`
-
-The same as `client.view_as_proxy` but yields the calling thread indefinitely until a registree with the key `key` exists.
 
 ## Replication
 
-### `client.to_server(key: any, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -> ()`
+### `client.to_server(key: any, sender: Sender_Client?, changes: TableChanges?, auto_commit: boolean?) -> ()`
 
 Sends changes to the server.
 
-```lua
+```luau
 local data = ReplicatedRegistry.client.view("player_123")
+    .await()
 data.coins = 200
 data.level = 5
 
@@ -70,8 +63,9 @@ ReplicatedRegistry.client.to_server("player_123")
 
 **Manual change tracking:**
 
-```lua
+```luau
 local data = ReplicatedRegistry.client.view("player_123")
+    .await()
 data.coins = 200
 
 local changes = ReplicatedRegistry.get_changes("player_123")
@@ -80,13 +74,12 @@ ReplicatedRegistry.client.to_server("player_123", nil, changes)
 
 ## Listening for Changes
 
-### `on_receive(key: any, callback: (sender: Player?, old_table: Table, changes: TableChanges) -> ()) -> ScriptConnection`
+### `on_receive(key: any, callback: (old_table: Table, changes: TableChanges) -> ()) -> ScriptConnection`
 
 Listens for incoming changes from the server.
 
-```lua
-local connection = ReplicatedRegistry.on_recieve("player_123", function(sender, table, changes)
-    print("Received changes from", sender)
+```luau
+local connection = ReplicatedRegistry.client.on_receive("player_123", function(table, changes)
     for _, change in changes do
         print("Path:", table.concat(change.p, "."))
         print("Value:", change.v)
@@ -97,10 +90,15 @@ end)
 connection:Disconnect()
 ```
 
-## Change Management
+### `on_key_changed(key: any, path: {any}, callback: (old_value: any, new_value: any) -> ()) -> ScriptConnection`
 
-Same as server API:
+Listens for incoming changes to a specific path from the server.
 
-- `get_changes(key)` - Get pending changes
-- `commit_changes(key)` - Commit changes
-- `revert_changes(key)` - Revert changes
+```luau
+local connection = ReplicatedRegistry.client.on_key_changed("player_123", {"coins"}, function(old_value, new_value)
+    print(`{old_value} -> {new_value}`)
+end)
+
+-- Disconnect when done
+connection:Disconnect()
+```

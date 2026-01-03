@@ -180,23 +180,23 @@
                     <main>
                         <h1 id="client-api"><a class="header" href="#client-api">Client API</a></h1>
 <h2 id="accessing-tables"><a class="header" href="#accessing-tables">Accessing Tables</a></h2>
-<h3 id="clientviewkey-any---table"><a class="header" href="#clientviewkey-any---table"><code>client.view(key: any) -&gt; Table?</code></a></h3>
-<p>Requests and returns the registered table from the server, and nil if not registered yet.</p>
-<pre><code class="language-lua">local playerData = ReplicatedRegistry.client.view("player_123")
+<h3 id="clientviewkey-any---view"><a class="header" href="#clientviewkey-any---view"><code>client.view(key: any) -&gt; View</code></a></h3>
+<p>Returns a viewing interface for registree data on the server.</p>
+<pre><code class="language-luau">local playerData = ReplicatedRegistry.client.view("player_123")
+    .unwrap()
 assert(playerData, "playerData not registered yet!")
 print(playerData.coins) -- 100
 
 -- Modify locally
 playerData.coins = 150
 </code></pre>
-<h3 id="clientawait_viewkey-any---table"><a class="header" href="#clientawait_viewkey-any---table"><code>client.await_view(key: any) -&gt; Table</code></a></h3>
-<p>Yields the calling thread indefinitely until a Registree registered with <code>key</code> is created on the server.</p>
-<pre><code class="language-lua">local playerData = ReplicatedRegistry.client.await_view("player_123")
+<pre><code class="language-luau">local playerData = ReplicatedRegistry.client.view("player_123")
+    .await()
 print(playerData.coins) -- 100
 </code></pre>
-<h3 id="clientview_as_proxykey-any---registreeinterface_client"><a class="header" href="#clientview_as_proxykey-any---registreeinterface_client"><code>client.view_as_proxy(key: any) -&gt; RegistreeInterface_Client?</code></a></h3>
-<p>Returns a proxy interface with helper methods.</p>
-<pre><code class="language-lua">local proxy = ReplicatedRegistry.client.view_as_proxy("player_123")
+<pre><code class="language-luau">local proxy = ReplicatedRegistry.client.view("player_123")
+    .as_proxy()
+    .await()
 assert(proxy, "proxy not registered yet!")
 
 -- Set values
@@ -213,14 +213,13 @@ proxy.incr({"coins"}, 50)
 proxy.replicate()
 
 -- Get full table
-local fullTable = proxy.full()
+local fullTable = proxy.data()
 </code></pre>
-<h3 id="clientawait_view_as_proxykey-any---registreeinterface_client"><a class="header" href="#clientawait_view_as_proxykey-any---registreeinterface_client"><code>client.await_view_as_proxy(key: any) -&gt; RegistreeInterface_Client</code></a></h3>
-<p>The same as <code>client.view_as_proxy</code> but yields the calling thread indefinitely until a registree with the key <code>key</code> exists.</p>
 <h2 id="replication"><a class="header" href="#replication">Replication</a></h2>
-<h3 id="clientto_serverkey-any-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#clientto_serverkey-any-sender-senderfunction-changes-tablechanges-auto_commit-boolean---"><code>client.to_server(key: any, sender: SenderFunction?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
+<h3 id="clientto_serverkey-any-sender-sender_client-changes-tablechanges-auto_commit-boolean---"><a class="header" href="#clientto_serverkey-any-sender-sender_client-changes-tablechanges-auto_commit-boolean---"><code>client.to_server(key: any, sender: Sender_Client?, changes: TableChanges?, auto_commit: boolean?) -&gt; ()</code></a></h3>
 <p>Sends changes to the server.</p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.client.view("player_123")
+<pre><code class="language-luau">local data = ReplicatedRegistry.client.view("player_123")
+    .await()
 data.coins = 200
 data.level = 5
 
@@ -228,17 +227,17 @@ data.level = 5
 ReplicatedRegistry.client.to_server("player_123")
 </code></pre>
 <p><strong>Manual change tracking:</strong></p>
-<pre><code class="language-lua">local data = ReplicatedRegistry.client.view("player_123")
+<pre><code class="language-luau">local data = ReplicatedRegistry.client.view("player_123")
+    .await()
 data.coins = 200
 
 local changes = ReplicatedRegistry.get_changes("player_123")
 ReplicatedRegistry.client.to_server("player_123", nil, changes)
 </code></pre>
 <h2 id="listening-for-changes"><a class="header" href="#listening-for-changes">Listening for Changes</a></h2>
-<h3 id="on_receivekey-any-callback-sender-player-old_table-table-changes-tablechanges------scriptconnection"><a class="header" href="#on_receivekey-any-callback-sender-player-old_table-table-changes-tablechanges------scriptconnection"><code>on_receive(key: any, callback: (sender: Player?, old_table: Table, changes: TableChanges) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
+<h3 id="on_receivekey-any-callback-old_table-table-changes-tablechanges------scriptconnection"><a class="header" href="#on_receivekey-any-callback-old_table-table-changes-tablechanges------scriptconnection"><code>on_receive(key: any, callback: (old_table: Table, changes: TableChanges) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
 <p>Listens for incoming changes from the server.</p>
-<pre><code class="language-lua">local connection = ReplicatedRegistry.on_recieve("player_123", function(sender, table, changes)
-    print("Received changes from", sender)
+<pre><code class="language-luau">local connection = ReplicatedRegistry.client.on_receive("player_123", function(table, changes)
     for _, change in changes do
         print("Path:", table.concat(change.p, "."))
         print("Value:", change.v)
@@ -248,13 +247,15 @@ end)
 -- Disconnect when done
 connection:Disconnect()
 </code></pre>
-<h2 id="change-management"><a class="header" href="#change-management">Change Management</a></h2>
-<p>Same as server API:</p>
-<ul>
-<li><code>get_changes(key)</code> - Get pending changes</li>
-<li><code>commit_changes(key)</code> - Commit changes</li>
-<li><code>revert_changes(key)</code> - Revert changes</li>
-</ul>
+<h3 id="on_key_changedkey-any-path-any-callback-old_value-any-new_value-any------scriptconnection"><a class="header" href="#on_key_changedkey-any-path-any-callback-old_value-any-new_value-any------scriptconnection"><code>on_key_changed(key: any, path: {any}, callback: (old_value: any, new_value: any) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
+<p>Listens for incoming changes to a specific path from the server.</p>
+<pre><code class="language-luau">local connection = ReplicatedRegistry.client.on_key_changed("player_123", {"coins"}, function(old_value, new_value)
+    print(`{old_value} -&gt; {new_value}`)
+end)
+
+-- Disconnect when done
+connection:Disconnect()
+</code></pre>
 
                     </main>
 

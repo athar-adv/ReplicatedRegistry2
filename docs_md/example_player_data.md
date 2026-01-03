@@ -4,7 +4,7 @@ A complete example of synchronizing player data between server and client.
 
 ## Server Script
 
-```lua
+```luau
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
@@ -60,7 +60,7 @@ Players.PlayerAdded:Connect(function(player)
     server.register(key, playerData, playerDataFilter)
     
     -- Listen for changes from client
-    ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
+    server.on_recieve(key, function(sender, tbl, changes)
         print(`Player {sender.Name} updated their data:`)
         for _, change in changes do
             print(`  {table.concat(change.p, ".")} = {change.v}`)
@@ -73,6 +73,7 @@ end)
 Players.PlayerRemoving:Connect(function(player)
     local key = player.UserId
     local data = server.view(key)
+        .expect()
     
     -- Save before player leaves
     savePlayerData(player, data)
@@ -80,7 +81,9 @@ end)
 
 -- Example: Give coins to player
 function giveCoins(player, amount)
-    local proxy = server.view_as_proxy(player.UserId)
+    local proxy = server.view(player.UserId)
+        .as_proxy()
+        .expect()
     
     proxy.incr({"coins"}, amount)
     proxy.replicate({player}) -- Send to client
@@ -89,6 +92,7 @@ end
 -- Example: Update player level
 function levelUp(player)
     local data = server.view(player.UserId)
+        .expect()
     
     data.level += 1
     data.coins += data.level * 10 -- Bonus coins
@@ -99,7 +103,7 @@ end
 
 ## Client Script
 
-```lua
+```luau
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local ReplicatedRegistry = require(ReplicatedStorage.ReplicatedRegistry2)
@@ -116,9 +120,10 @@ local key = player.UserId
 
 -- Access player data
 local playerData = client.view(key)
+    .await()
 
 -- Listen for updates from server
-ReplicatedRegistry.on_recieve(key, function(sender, tbl, changes)
+client.on_recieve(key, function(tbl, changes)
     print("Received update from server:")
     for _, change in changes do
         print(`  {table.concat(change.p, ".")} = {change.v}`)
@@ -131,7 +136,9 @@ end)
 
 -- Example: Update settings
 function updateSettings(soundEnabled, musicEnabled)
-    local proxy = client.view_as_proxy(key)
+    local proxy = client.view(key)
+        .as_proxy()
+        .expect()
     
     proxy.set({"settings", "sound"}, soundEnabled)
     proxy.set({"settings", "music"}, musicEnabled)
@@ -142,6 +149,7 @@ end
 -- Example: Purchase item
 function purchaseItem(itemName, cost)
     local data = client.view(key)
+        .expect()
     
     if data.coins >= cost then
         data.coins -= cost

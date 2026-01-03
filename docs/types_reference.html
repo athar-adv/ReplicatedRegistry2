@@ -182,11 +182,11 @@
 <p>Type definitions for ReplicatedRegistry2.</p>
 <h2 id="core-types"><a class="header" href="#core-types">Core Types</a></h2>
 <h3 id="table"><a class="header" href="#table"><code>Table</code></a></h3>
-<pre><code class="language-lua">export type Table = {[any]: any}
+<pre><code class="language-luau">export type Table = {[any]: any}
 </code></pre>
 <p>A generic table type used for registree data.</p>
 <h3 id="tablechanges"><a class="header" href="#tablechanges"><code>TableChanges</code></a></h3>
-<pre><code class="language-lua">export type TableChanges = {
+<pre><code class="language-luau">export type TableChanges = {
     {v: any, p: {any}}
 }
 </code></pre>
@@ -204,7 +204,7 @@
 </code></pre>
 <h2 id="filter-types"><a class="header" href="#filter-types">Filter Types</a></h2>
 <h3 id="filter"><a class="header" href="#filter"><code>Filter</code></a></h3>
-<pre><code class="language-lua">export type Filter = (sender: Player?, register_key: any, tbl: Table, changes: TableChanges) -&gt; boolean
+<pre><code class="language-luau">export type Filter = (sender: Player?, register_key: any, tbl: Table, changes: TableChanges) -&gt; boolean
 </code></pre>
 <p>A function that validates changes.</p>
 <p><strong>Parameters:</strong></p>
@@ -216,7 +216,7 @@
 </ul>
 <p><strong>Returns:</strong> <code>true</code> to accept, <code>false</code> to reject</p>
 <h3 id="filterlist"><a class="header" href="#filterlist"><code>FilterList</code></a></h3>
-<pre><code class="language-lua">type FilterList = {
+<pre><code class="language-luau">type FilterList = {
     player_blacklist: {number}?,
     player_whitelist: {number}?,
     rate_limit: number?,
@@ -235,24 +235,46 @@
     full: () -&gt; T,
 }
 </code></pre>
-<p>The proxy interface returned by <code>view_as_proxy()</code>.</p>
+<p>The proxy interface returned by the methods of <code>view().as_proxy()</code>.</p>
 <p><strong>Methods:</strong></p>
 <ul>
-<li><code>set(...path)(value)</code>: Set a value at path</li>
-<li><code>get(...path)</code>: Get a value at path</li>
-<li><code>incr(...path)(amount)</code>: Increment a number at path</li>
-<li><code>replicate(args...)</code>: Replicate changes</li>
-<li><code>full()</code>: Get the full table</li>
+<li><code>set(path: {any}, value: any) -&gt; ()</code>: Set a value at path</li>
+<li><code>get(path: {any}) -&gt; any</code>: Get a value at path</li>
+<li><code>incr(path: {any}, delta: number) -&gt; ()</code>: Increment a number at path</li>
+<li><code>replicate(args...) -&gt; ()</code>: Replicate changes</li>
+<li><code>data() -&gt; Table</code>: Get the full table</li>
 </ul>
-<p><strong>Server ReplicateArgs:</strong> <code>{Player}?, RemoteEvent?</code>
-<strong>Client ReplicateArgs:</strong> <code>RemoteEvent?</code></p>
+<p><strong>Server <code>replicate()</code> args:</strong> <code>{Player}?, RemoteEvent?</code>
+<strong>Client <code>replicate()</code> args:</strong> <code>RemoteEvent?</code></p>
+<h2 id="view"><a class="header" href="#view">View</a></h2>
+<pre><code class="language-luau">export type View&lt;T = Table, ProxyType = any&gt; = {
+	await: () -&gt; T,
+	unwrap: () -&gt; T?,
+	expect: () -&gt; T,
+	as_proxy: () -&gt; {
+		await: () -&gt; ProxyType,
+		unwrap: () -&gt; ProxyType?,
+		expect: () -&gt; ProxyType
+	}
+}
+</code></pre>
+<p>An interface for viewing non-gauranteed registree data.</p>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>expect() -&gt; RegistreeInterface</code>: Errors if the viewed value does not exist, else returns it</li>
+<li><code>unwrap() -&gt; RegistreeInterface?</code>: Returns the viewed value, regardless if it exists or not</li>
+<li><code>await() -&gt; RegistreeInterface</code>: If the viewed value does not exist, then it will yield the calling thread until it does, and return it.</li>
+<li><code>as_proxy() -&gt; ProxyView</code>: Returns a sub-view for viewing the registree data as proxies.</li>
+</ul>
 <h2 id="internal-types"><a class="header" href="#internal-types">Internal Types</a></h2>
 <h3 id="registree"><a class="header" href="#registree"><code>Registree</code></a></h3>
-<pre><code class="language-lua">type Registree&lt;T=Table&gt; = {
+<pre><code class="language-luau">type Registree&lt;T=Table&gt; = {
     value: T,
     copy: Table,
     filter: Filter?,
-    onRecievedListeners: {(plr: Player?, tbl: Table, changes: TableChanges) -&gt; ()},
+    onRecievedListeners: {(...any) -&gt; ()},
+    onUpdatedListeners: {(...any) -&gt; ()},
+    onKeyChangedListeners: {[string]: {(...any) -&gt; ()}}
 }
 </code></pre>
 <p>Internal structure for registered tables.</p>
