@@ -1,6 +1,6 @@
 --!strict
 --!optimize 2
---ReplicatedRegistry2.luau (1.5.0)
+--ReplicatedRegistry2.luau (2.0.1)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -99,6 +99,7 @@ type Registree<T=Table> = {
 	filter: Filter?,
 	
 	onRecievedListeners: {(...any) -> ()},
+	onUpdatedListeners: {(...any) -> ()},
 	onKeyChangedListeners: {[string]: {(...any) -> ()}}
 }
 export type RegistreeInterface_Server<T=Table> = {
@@ -417,6 +418,7 @@ local function remote_event_reciever(player: Player?, register_key: any, changes
 	local filter = registree.filter
 	local registerTable = registree.value
 	local onRecievedSignal = registree.onRecievedListeners
+	local onUpdatedSignal = registree.onUpdatedListeners
 	
 	if filter then
 		if not filter(player, register_key, registerTable, changes) then
@@ -456,6 +458,11 @@ local function remote_event_reciever(player: Player?, register_key: any, changes
 		Signal.fire(onRecievedSignal, player, registerTable, changes)
 	end
 	apply_changes(registerTable, changes)
+	if IS_CLIENT then
+		Signal.fire(onUpdatedSignal, registerTable)
+	else
+		Signal.fire(onUpdatedSignal, player, registerTable)
+	end
 end
 
 --[[
@@ -617,12 +624,27 @@ end
     @param fn: The callback function to call when changes are received
     @return: A ScriptConnection representing the connection.
 ]]
-function ReplicatedRegistry.client.on_receive(register_key: string, fn: (data: Table, changes: TableChanges) -> ())
+function ReplicatedRegistry.client.on_receive(register_key: string, fn: (old_data: Table, changes: TableChanges) -> ())
 	assert(IS_CLIENT, MUST_CLIENT)
 	
 	local registree = assert(registrees[register_key], `Registree '{register_key}' does not exist.`)
 
 	return Signal.connect(registree.onRecievedListeners, fn)
+end
+
+--[[
+	Connects a callback function to be called when changes are applied for a specific table.
+	
+    @param registerKey: The unique identifier for the table
+    @param fn: The callback function to call when changes are applied
+    @return: A ScriptConnection representing the connection.
+]]
+function ReplicatedRegistry.client.on_update(register_key: string, fn: (data: Table) -> ())
+	assert(IS_CLIENT, MUST_CLIENT)
+
+	local registree = assert(registrees[register_key], `Registree '{register_key}' does not exist.`)
+
+	return Signal.connect(registree.onUpdatedListeners, fn)
 end
 
 --[[
@@ -694,6 +716,7 @@ function ReplicatedRegistry.client.view(register_key: any): View<Table, Registre
 				filter = nil,
 
 				onRecievedListeners = {},
+				onUpdatedListeners = {},
 				onKeyChangedListeners = {}
 			}
 			registrees[register_key] = reg
@@ -826,12 +849,27 @@ end
     @param fn: The callback function to call when changes are received
     @return: A ScriptConnection representing the connection.
 ]]
-function ReplicatedRegistry.server.on_receive(register_key: string, fn: (sender: Player, data: Table, changes: TableChanges) -> ())
+function ReplicatedRegistry.server.on_receive(register_key: string, fn: (sender: Player, old_data: Table, changes: TableChanges) -> ())
 	assert(not IS_CLIENT, MUST_SERVER)
 	
 	local registree = assert(registrees[register_key], `Registree '{register_key}' does not exist.`)
 
 	return Signal.connect(registree.onRecievedListeners, fn)
+end
+
+--[[
+	Connects a callback function to be called when changes are applied for a specific table.
+	
+    @param registerKey: The unique identifier for the table
+    @param fn: The callback function to call when changes are applied
+    @return: A ScriptConnection representing the connection.
+]]
+function ReplicatedRegistry.server.on_update(register_key: string, fn: (sender: Player, data: Table) -> ())
+	assert(not IS_CLIENT, MUST_SERVER)
+
+	local registree = assert(registrees[register_key], `Registree '{register_key}' does not exist.`)
+
+	return Signal.connect(registree.onUpdatedListeners, fn)
 end
 
 --[[
@@ -927,6 +965,7 @@ function ReplicatedRegistry.server.register<T>(register_key: any, registree_valu
 		filter = filter,
 		
 		onRecievedListeners = {},
+		onUpdatedListeners = {},
 		onKeyChangedListeners = {}
 	}
 	
