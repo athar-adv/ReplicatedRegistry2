@@ -256,6 +256,8 @@ end)
 -- Disconnect when done
 connection:Disconnect()
 </code></pre>
+<h3 id="on_updateregister_key-string-fn-data-table------scriptconnection"><a class="header" href="#on_updateregister_key-string-fn-data-table------scriptconnection"><code>on_update(register_key: string, fn: (data: Table) -&gt; ()) -&gt; ScriptConnection</code></a></h3>
+<p>Listens for applied changes incoming from the server. Differs from on_receive in that the changes are already applied to the data when the callback is called</p>
 
                     </main>
 

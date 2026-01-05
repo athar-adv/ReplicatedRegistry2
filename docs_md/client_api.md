@@ -102,3 +102,8 @@ end)
 -- Disconnect when done
 connection:Disconnect()
 ```
+
+### `on_update(register_key: string, fn: (data: Table) -> ()) -> ScriptConnection`
+
+Listens for applied changes incoming from the server. Differs from on_receive in that the changes are already applied to the data when the callback is called
+
